@@ -141,6 +141,11 @@ export function setupBot(services) {
       return portfolioCommand(ctx);
     }
 
+    // Login / Authenticate
+    if (text.includes('login') || text.includes('auth') || text.includes('connect kite') || text.includes('zerodha')) {
+      return loginCommand(ctx);
+    }
+
     // Positions
     if (text.includes('positions')) {
       return positionsCommand(ctx);

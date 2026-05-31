@@ -165,8 +165,15 @@ export function formatScanResults(results, meta = {}) {
   // Sort qualifying by score descending
   qualifying.sort((a, b) => (b.indicatorResults?.score || 0) - (a.indicatorResults?.score || 0));
   
-  // Sort partial by momentum descending (since they failed mandatory, score is 0)
-  partial.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
+  // Sort partial by preserved score descending, fallback to momentum
+  partial.sort((a, b) => {
+    const scoreA = a.indicatorResults?.score || 0;
+    const scoreB = b.indicatorResults?.score || 0;
+    if (scoreB === scoreA) {
+      return (b.changePercent || 0) - (a.changePercent || 0);
+    }
+    return scoreB - scoreA;
+  });
 
   const confidenceEmojis = {
     'Strong': '🟢',

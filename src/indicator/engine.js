@@ -112,7 +112,8 @@ class IndicatorEngine {
           passed = true;
         } else {
           passed = false;
-          score = 0; // Reset score if it fails mandatory rules
+          // We intentionally DO NOT reset the score to 0 here anymore.
+          // We want the user to see how high the score was, even if it failed mandatory rules.
           confidenceLabel = 'Failed Mandatory';
         }
       } else {
