@@ -28,9 +28,20 @@ export default function registerCallbackHandlers(bot, services) {
         return;
       }
 
-      // --- Refresh Scan ---
-      if (data === 'refresh_scan') {
-        await handleRefreshScan(ctx, services);
+      // --- Scan All ---
+      if (data === 'scan_all') {
+        const { executeScan } = await import('../commands/scan.js');
+        await executeScan(ctx, services, 'all', ctx.callbackQuery.message.message_id);
+        await ctx.answerCallbackQuery();
+        return;
+      }
+
+      // --- Scan Specific Screener ---
+      if (data.startsWith('scan_slug_')) {
+        const slug = data.replace('scan_slug_', '');
+        const { executeScan } = await import('../commands/scan.js');
+        await executeScan(ctx, services, slug, ctx.callbackQuery.message.message_id);
+        await ctx.answerCallbackQuery();
         return;
       }
 
@@ -104,58 +115,7 @@ async function handleRefreshPortfolio(ctx, services) {
   }
 }
 
-/**
- * Re-run the screener scan and update the message.
- *
- * @param {import('grammy').Context} ctx
- * @param {object} services
- */
-async function handleRefreshScan(ctx, services) {
-  const { screener, indicatorEngine } = services;
-
-  if (!screener) {
-    await ctx.answerCallbackQuery({ text: '⚠️ Screener not configured' });
-    return;
-  }
-
-  await ctx.answerCallbackQuery({ text: '🔍 Rescanning…' });
-
-  try {
-    const scanResults = await screener.scanAll();
-
-    const enrichedResults = [];
-    for (const stock of scanResults || []) {
-      let indicatorResults = null;
-      if (indicatorEngine) {
-        try {
-          indicatorResults = await indicatorEngine.evaluate(stock);
-        } catch (err) {
-          logger.warn({ err, symbol: stock.symbol }, 'Indicator eval failed');
-        }
-      }
-      enrichedResults.push({ ...stock, indicatorResults });
-    }
-
-    const { InlineKeyboard } = await import('grammy');
-    const keyboard = new InlineKeyboard();
-    const qualifying = enrichedResults.filter((r) => r.indicatorResults?.passed);
-    qualifying.slice(0, 5).forEach((s) => {
-      keyboard.text(`🔍 ${s.symbol}`, `check_${s.symbol}`);
-    });
-    keyboard.row().text('🔄 Rescan', 'refresh_scan');
-
-    await ctx.editMessageText(formatScanResults(enrichedResults), {
-      parse_mode: 'HTML',
-      reply_markup: keyboard,
-    });
-  } catch (error) {
-    logger.error({ err: error }, 'Rescan failed');
-    await ctx.editMessageText(formatError(`Rescan failed: ${error.message}`), {
-      parse_mode: 'HTML',
-    });
-  }
-}
-
+// handleRefreshScan removed in favour of executeScan in scan.js
 /**
  * Add a symbol to the watchlist.
  *

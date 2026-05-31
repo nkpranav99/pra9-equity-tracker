@@ -45,18 +45,23 @@ class IndicatorEngine {
    * @param {string} symbol - Stock symbol (e.g., 'RELIANCE')
    * @returns {Promise<EvaluationResult>}
    */
-  async evaluate(symbol) {
+  async evaluate(stockOrSymbol) {
+    // Handle both string 'RELIANCE' or object { symbol: 'RELIANCE', price: 2400 }
+    const symbolStr = typeof stockOrSymbol === 'object' ? stockOrSymbol.symbol : stockOrSymbol;
+    const initialPrice = typeof stockOrSymbol === 'object' ? stockOrSymbol.price : undefined;
+
     try {
       // 1. Fetch OHLCV data for the symbol
-      const candles = await this.dataFetcher.getOHLCV(symbol, this.rules.timeframe);
+      const candles = await this.dataFetcher.getOHLCV(symbolStr, this.rules.timeframe);
 
       if (!candles || candles.length < 200) {
         logger.warn(
-          { symbol, candleCount: candles?.length ?? 0 },
+          { symbol: symbolStr, candleCount: candles?.length ?? 0 },
           'Insufficient OHLCV data for indicator evaluation'
         );
         return {
-          symbol,
+          symbol: symbolStr,
+          price: initialPrice || 0,
           passed: false,
           error: `Insufficient data (got ${candles?.length ?? 0} candles, need ≥200)`,
           results: [],
@@ -87,25 +92,24 @@ class IndicatorEngine {
       let confidenceLabel = 'None';
 
       if (this.rules.logic === 'CONFIDENCE') {
-        // Must pass all mandatory conditions
-        const mandatoryPassed = results.filter(r => r.mandatory).every(r => r.passed);
+        // Compute score for all evaluated conditions
+        results.forEach(r => {
+          maxScore += r.weight;
+          if (r.passed) score += r.weight;
+        });
         
+        // Determine label based on score
+        const strong = this.rules.confidence?.strong || 80;
+        const medium = this.rules.confidence?.medium || 40;
+        
+        if (score >= strong) confidenceLabel = 'Strong';
+        else if (score >= medium) confidenceLabel = 'Medium';
+        else confidenceLabel = 'Low';
+
+        // Must pass all mandatory conditions to be fully qualified
+        const mandatoryPassed = results.filter(r => r.mandatory).every(r => r.passed);
         if (mandatoryPassed) {
-          passed = true; // Qualified for recommendation
-          
-          // Compute score
-          results.forEach(r => {
-            maxScore += r.weight;
-            if (r.passed) score += r.weight;
-          });
-          
-          // Determine label
-          const strong = this.rules.confidence?.strong || 80;
-          const medium = this.rules.confidence?.medium || 40;
-          
-          if (score >= strong) confidenceLabel = 'Strong';
-          else if (score >= medium) confidenceLabel = 'Medium';
-          else confidenceLabel = 'Low';
+          passed = true;
         }
       } else {
         // Fallback for strict AND/OR
@@ -114,16 +118,29 @@ class IndicatorEngine {
           : results.some((r) => r.passed);
       }
 
+      // 5. Build final result
+      const latestPrice = closes[closes.length - 1];
+
       logger.debug(
-        { symbol, passed, score, confidenceLabel, conditionsPassed: results.filter((r) => r.passed).length, total: results.length },
+        { symbol: symbolStr, passed, score, confidenceLabel, conditionsPassed: results.filter((r) => r.passed).length, total: results.length },
         'Indicator evaluation complete'
       );
 
-      return { symbol, passed, score, maxScore, confidenceLabel, results, timestamp: new Date().toISOString() };
+      return { 
+        symbol: symbolStr, 
+        price: latestPrice,
+        passed, 
+        score, 
+        maxScore, 
+        confidenceLabel, 
+        results, 
+        timestamp: new Date().toISOString() 
+      };
     } catch (err) {
-      logger.error({ symbol, err: err.message }, 'Indicator evaluation failed');
+      logger.error({ symbol: symbolStr, err: err.message }, 'Indicator evaluation failed');
       return {
-        symbol,
+        symbol: symbolStr,
+        price: initialPrice || 0,
         passed: false,
         error: err.message,
         results: [],
