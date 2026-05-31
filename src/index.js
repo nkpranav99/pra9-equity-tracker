@@ -8,6 +8,7 @@ import { setupCronJobs } from './scheduler/cron.js';
 import KiteClient from './kite/client.js';
 import KiteAuth from './kite/auth.js';
 import ChartinkScraper from './screener/chartink.js';
+import DataFetcher from './indicator/data-fetcher.js';
 import IndicatorEngine from './indicator/engine.js';
 
 import { startWebhookServer } from './server/webhook.js';
@@ -26,7 +27,8 @@ async function main() {
     const kiteClient = new KiteClient(config.kite.apiKey, config.kite.apiSecret);
     const kiteAuth = new KiteAuth(kiteClient, config.kite);
     const screener = new ChartinkScraper();
-    const indicatorEngine = new IndicatorEngine();
+    const dataFetcher = new DataFetcher(kiteClient);
+    const indicatorEngine = new IndicatorEngine(dataFetcher);
 
     const services = {
       kiteClient,
