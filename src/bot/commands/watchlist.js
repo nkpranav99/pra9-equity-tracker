@@ -21,7 +21,7 @@ export default async function watchlistCommand(ctx) {
   // Import db lazily — it may not be initialized yet at module load time
   let db;
   try {
-    db = (await import('../../db/queries.js')).default;
+    db = await import('../../db/queries.js');
   } catch {
     // db module may not exist yet; handle gracefully
     db = null;
