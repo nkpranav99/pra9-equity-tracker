@@ -38,7 +38,7 @@ const rules = {
       quietPeriods: 4,     // 4 consecutive days below the line
       threshold: 2.0,      // The horizontal line value (2x average volume)
       mandatory: true,     // Must pass for the stock to be considered
-      weight: 0,           // Baseline, doesn't add to bonus points
+      weight: 20,          // Gives a 20-point head start if volume is strong
       description: 'Volume ratio crosses 2.0 after being below 2.0 for 4 days, with bullish price',
     },
     {
@@ -49,7 +49,7 @@ const rules = {
       operator: '>',
       multiplier: 1.5,
       mandatory: false,
-      weight: 20,
+      weight: 16,
       description: 'Current volume > 1.5x average (confirms momentum)',
     },
     {
@@ -60,7 +60,7 @@ const rules = {
       operator: '>',
       value: 55,
       mandatory: false,
-      weight: 20,
+      weight: 16,
       description: 'RSI(14) > 55 (rules out fakeouts)',
     },
     {
@@ -70,7 +70,7 @@ const rules = {
       fastPeriod: 9,
       slowPeriod: 10,
       mandatory: false,
-      weight: 20,
+      weight: 16,
       description: 'EMA(9) > EMA(10)',
     },
     {
@@ -80,7 +80,7 @@ const rules = {
       fastPeriod: 50,
       slowPeriod: 200,
       mandatory: false,
-      weight: 20,
+      weight: 16,
       description: 'EMA(50) > EMA(200)',
     },
     {
@@ -92,7 +92,7 @@ const rules = {
       signalPeriod: 9,
       signal: 'bullish_crossover',
       mandatory: false,
-      weight: 20,
+      weight: 16,
       description: 'MACD line > Signal line',
     },
   ],
