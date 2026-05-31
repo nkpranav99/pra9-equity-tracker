@@ -13,7 +13,6 @@ import checkCommand from './commands/check.js';
 import watchlistCommand from './commands/watchlist.js';
 import helpCommand from './commands/help.js';
 import loginCommand from './commands/login.js';
-import authCommand from './commands/auth.js';
 
 // Import callback handler
 import callbackHandler from './callbacks/handler.js';
@@ -61,7 +60,6 @@ export function setupBot(services) {
   bot.command('watchlist', watchlistCommand);
   bot.command('help', helpCommand);
   bot.command('login', loginCommand);
-  bot.command('auth', authCommand);
 
   // Set up the autocomplete menu in Telegram
   bot.api.setMyCommands([
@@ -73,7 +71,6 @@ export function setupBot(services) {
     { command: 'check', description: 'Check a specific stock symbol' },
     { command: 'watchlist', description: 'Manage your watchlist' },
     { command: 'login', description: 'Get the manual Kite login link' },
-    { command: 'auth', description: 'Authenticate with a request token' },
     { command: 'help', description: 'Show all available commands' },
   ]).catch(err => logger.error({ err }, 'Failed to set Telegram commands menu'));
 

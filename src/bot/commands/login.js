@@ -23,10 +23,7 @@ export default async function loginCommand(ctx) {
       `Please log into Zerodha using the link below:`,
       `${loginUrl}`,
       ``,
-      `After logging in, you will be redirected to a blank page. Look at the URL bar and copy the <b>request_token</b>.`,
-      ``,
-      `Send it back to me like this:`,
-      `<code>/auth YOUR_REQUEST_TOKEN_HERE</code>`
+      `After logging in, you will be automatically redirected to your secure bot server and authenticated. You can then close your browser tab!`
     ].join('\n');
 
     await ctx.reply(message, { parse_mode: 'HTML', disable_web_page_preview: true });

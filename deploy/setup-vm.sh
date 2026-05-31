@@ -15,7 +15,9 @@ echo "=========================================="
 
 # --- 1. System Update ---
 echo "[1/8] Updating system packages..."
-apt update && apt upgrade -y
+apt-get update -y
+apt-get upgrade -y
+apt-get install -y curl wget git build-essential sqlite3 certbot
 
 # --- 2. Install Node.js 20.x ---
 echo "[2/8] Installing Node.js 20.x..."
@@ -53,12 +55,14 @@ echo ""
 echo "[7/8] Configuring firewall..."
 # Allow SSH (should already be open)
 ufw allow 22/tcp
-# Allow Webhook Server (Kite Redirect)
-ufw allow 8080/tcp
+# Allow HTTP for Certbot challenges
+ufw allow 80/tcp
+# Allow HTTPS Webhook Server (Kite Redirect)
+ufw allow 443/tcp
 # Enable firewall
 ufw --force enable
 
-echo "Firewall configured. Port 8080 is open for Kite webhooks."
+echo "Firewall configured. Ports 80 and 443 are open for SSL webhooks."
 
 # --- 8. Done ---
 echo "[8/8] Finishing up..."

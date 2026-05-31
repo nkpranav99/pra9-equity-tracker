@@ -48,11 +48,14 @@ async function main() {
       }
     };
 
-    // 5. Setup Cron Jobs
+    // 5. Start Webhook Server
+    startWebhookServer(kiteClient, services.notifyOwner);
+
+    // 6. Setup Cron Jobs
     setupCronJobs(services);
     logger.info('Cron jobs scheduled');
 
-    // 6. Start the Bot
+    // 7. Start the Bot
     bot.start({
       onStart: (botInfo) => {
         logger.info(`🤖 Bot @${botInfo.username} started successfully`);

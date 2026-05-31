@@ -13,6 +13,9 @@ const config = {
     apiSecret: process.env.KITE_API_SECRET,
   },
 
+  // --- Webhook ---
+  domain: process.env.BOT_DOMAIN,
+
   // --- Chartink ---
   chartink: {
     baseUrl: 'https://chartink.com',
@@ -61,6 +64,11 @@ export function validateConfig() {
     ['KITE_API_KEY', config.kite.apiKey],
     ['KITE_API_SECRET', config.kite.apiSecret],
   ];
+
+  // BOT_DOMAIN is optional, but print a warning if missing
+  if (!config.domain) {
+    console.warn('⚠️ BOT_DOMAIN not set. Seamless webhook login via HTTPS will be disabled.');
+  }
 
   const missing = required.filter(([, val]) => !val);
   if (missing.length > 0) {
