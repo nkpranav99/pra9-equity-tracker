@@ -91,7 +91,8 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
 
     // Determine dynamic limits
     const evalLimit = slug === 'all' ? 50 : 30;
-    const displayLimit = slug === 'all' ? 20 : 10;
+    const displayLimit = slug === 'all' ? 25 : 10;
+    const maxQualifiedLimit = slug === 'all' ? 10 : 5;
 
     // Sort by momentum (changePercent) and cap before evaluation to save API calls
     scanResults.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
@@ -122,12 +123,18 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
       return scoreB - scoreA;
     });
 
-    // Cap to final display limit
-    enrichedResults = enrichedResults.slice(0, displayLimit);
+    // 3. Apply custom limits for qualified vs partial
+    let qualifying = enrichedResults.filter((r) => r.indicatorResults?.passed);
+    let partial = enrichedResults.filter((r) => !r.indicatorResults?.passed);
 
-    // 3. Build inline keyboard with check buttons
-    const qualifying = enrichedResults.filter((r) => r.indicatorResults?.passed);
-    const partial = enrichedResults.filter((r) => !r.indicatorResults?.passed);
+    qualifying = qualifying.slice(0, maxQualifiedLimit);
+    const remainingSlots = displayLimit - qualifying.length;
+    partial = partial.slice(0, remainingSlots);
+
+    // Recombine for UI
+    enrichedResults = [...qualifying, ...partial];
+
+    // 4. Build inline keyboard with check buttons
     const keyboard = new InlineKeyboard();
 
     if (qualifying.length > 0) {
