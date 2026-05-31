@@ -17,7 +17,7 @@ echo "=========================================="
 echo "[1/8] Updating system packages..."
 apt-get update -y
 apt-get upgrade -y
-apt-get install -y curl wget git build-essential sqlite3 certbot
+apt-get install -y curl wget git build-essential sqlite3 nginx certbot python3-certbot-nginx
 
 # --- 2. Install Node.js 20.x ---
 echo "[2/8] Installing Node.js 20.x..."

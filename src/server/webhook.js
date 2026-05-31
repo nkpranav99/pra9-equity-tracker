@@ -1,20 +1,17 @@
 import express from 'express';
-import https from 'https';
-import http from 'http';
-import fs from 'fs';
-import path from 'path';
 import logger from '../utils/logger.js';
 import config from '../config.js';
 
 /**
- * Start a secure HTTPS web server to catch the Kite Connect redirect URL.
+ * Start a simple web server to catch the Kite Connect redirect URL.
  * 
  * @param {import('../kite/client.js').default} kiteClient
  * @param {Function} notifyOwner - Function to send Telegram messages to the owner
  */
 export function startWebhookServer(kiteClient, notifyOwner) {
   const app = express();
-  
+  const PORT = process.env.PORT || 8080;
+
   app.get('/kite-auth', async (req, res) => {
     const requestToken = req.query.request_token;
     const status = req.query.status;
@@ -52,34 +49,7 @@ export function startWebhookServer(kiteClient, notifyOwner) {
     }
   });
 
-  // Check if we have a domain configured for HTTPS
-  if (config.domain) {
-    try {
-      // Standard certbot path for let's encrypt certificates
-      const privateKey = fs.readFileSync(`/etc/letsencrypt/live/${config.domain}/privkey.pem`, 'utf8');
-      const certificate = fs.readFileSync(`/etc/letsencrypt/live/${config.domain}/fullchain.pem`, 'utf8');
-      
-      const credentials = { key: privateKey, cert: certificate };
-      
-      const httpsServer = https.createServer(credentials, app);
-      httpsServer.listen(443, () => {
-        logger.info(`🔒 Secure Webhook server listening on port 443 for ${config.domain}`);
-      });
-    } catch (err) {
-      logger.error({ err }, `Failed to load SSL certificates for ${config.domain}. Ensure certbot has been run.`);
-      // Fallback to HTTP if SSL fails
-      startHttpServer(app);
-    }
-  } else {
-    // If no domain is configured, fallback to standard HTTP
-    startHttpServer(app);
-  }
-}
-
-function startHttpServer(app) {
-  const PORT = process.env.PORT || 8080;
-  const httpServer = http.createServer(app);
-  httpServer.listen(PORT, () => {
-    logger.warn(`⚠️ Running insecure HTTP Webhook server on port ${PORT}`);
+  app.listen(PORT, () => {
+    logger.info(`🌐 Webhook server listening on port ${PORT}`);
   });
 }
