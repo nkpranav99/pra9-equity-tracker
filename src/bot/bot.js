@@ -75,7 +75,7 @@ export function setupBot(services) {
   ]).catch(err => logger.error({ err }, 'Failed to set Telegram commands menu'));
 
   // Register callback queries (inline keyboards)
-  bot.on('callback_query:data', callbackHandler);
+  callbackHandler(bot, services);
 
   // Handle unknown commands gracefully
   bot.on('message', async (ctx) => {
