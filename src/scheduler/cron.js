@@ -34,17 +34,31 @@ export function setupCronJobs(services) {
     { timezone: config.market.timezone }
   );
 
-  // ─── Screener Scan (every N minutes during market hours, Mon-Fri) ───
-  const scanInterval = config.scan.intervalMinutes;
+  // ─── Pre-Market Screener Scan (9:05 AM IST, Mon-Fri) ───
   cron.schedule(
-    `*/${scanInterval} ${config.market.openHour}-${config.market.closeHour} * * 1-5`,
+    '5 9 * * 1-5',
     async () => {
-      if (!isMarketOpen()) return;
-      logger.info('⏰ Cron: Screener scan triggered');
+      if (!isTradingDay()) return;
+      logger.info('⏰ Cron: Pre-market screener scan triggered');
       try {
         await runScreenerScan(services);
       } catch (err) {
-        logger.error({ err }, 'Cron: Screener scan failed');
+        logger.error({ err }, 'Cron: Pre-market screener scan failed');
+      }
+    },
+    { timezone: config.market.timezone }
+  );
+
+  // ─── Post-Market Screener Scan (3:45 PM IST, Mon-Fri) ───
+  cron.schedule(
+    '45 15 * * 1-5',
+    async () => {
+      if (!isTradingDay()) return;
+      logger.info('⏰ Cron: Post-market screener scan triggered');
+      try {
+        await runScreenerScan(services);
+      } catch (err) {
+        logger.error({ err }, 'Cron: Post-market screener scan failed');
       }
     },
     { timezone: config.market.timezone }
@@ -82,7 +96,6 @@ export function setupCronJobs(services) {
 
   logger.info(
     {
-      scanInterval: `${scanInterval} min`,
       marketHours: `${config.market.openHour}:${String(config.market.openMinute).padStart(2, '0')}-${config.market.closeHour}:${String(config.market.closeMinute).padStart(2, '0')}`,
     },
     '✅ All cron jobs scheduled'
@@ -156,7 +169,7 @@ async function runScreenerScan(services) {
  * Send morning briefing with portfolio summary.
  */
 async function runMorningBriefing(services) {
-  const { kiteClient, notifyOwner } = services;
+  const { kiteClient, indicatorEngine, notifyOwner } = services;
 
   const now = getNowIST();
   const dateStr = now.toLocaleDateString('en-IN', {
@@ -182,6 +195,27 @@ async function runMorningBriefing(services) {
         `Current: ₹${totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}\n` +
         `P&amp;L: ${totalPnl >= 0 ? '+' : ''}₹${totalPnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })} (${pnlPercent.toFixed(2)}%) ${emoji}\n` +
         `Holdings: ${holdings.length} stocks\n`;
+
+      // Evaluate holdings for strong confidence
+      let actionableStocks = [];
+      if (indicatorEngine && holdings.length > 0) {
+        for (const holding of holdings) {
+          try {
+            // Kite holdings use trading symbol (e.g., RELIANCE)
+            const result = await indicatorEngine.evaluate(holding.tradingsymbol);
+            // Alert if it still maintains a strong confidence or passes conditions
+            if (result.passed || result.score >= 80) {
+               actionableStocks.push(`${holding.tradingsymbol} (${result.score}/100)`);
+            }
+          } catch (err) {
+            logger.warn({ symbol: holding.tradingsymbol }, 'Could not evaluate portfolio stock');
+          }
+        }
+        if (actionableStocks.length > 0) {
+           portfolioSection += `\n<b>👀 Keep an Eye On (High Confidence):</b>\n${actionableStocks.join(', ')}\n`;
+        }
+      }
+
     } catch (err) {
       portfolioSection = '\n<i>⚠️ Could not fetch portfolio data</i>\n';
     }
@@ -193,7 +227,6 @@ async function runMorningBriefing(services) {
     `━━━━━━━━━━━━━━━━\n` +
     `${portfolioSection}\n` +
     `🕘 Market opens at 9:15 AM IST\n` +
-    `📡 Screener scans every ${config.scan.intervalMinutes} min\n` +
     `\n<i>Use /scan to check screeners now</i>`;
 
   await notifyOwner(message);
@@ -203,10 +236,11 @@ async function runMorningBriefing(services) {
  * Send end-of-day summary.
  */
 async function runEodSummary(services) {
-  const { kiteClient, notifyOwner } = services;
+  const { kiteClient, indicatorEngine, notifyOwner } = services;
 
   let positionsSection = '';
   let ordersSection = '';
+  let portfolioActionSection = '';
 
   if (kiteClient?.isAuthenticated) {
     try {
@@ -231,13 +265,33 @@ async function runEodSummary(services) {
     } catch {
       ordersSection = '';
     }
+
+    try {
+      // Evaluate holdings for strong confidence
+      const holdings = await kiteClient.getHoldings();
+      let actionableStocks = [];
+      if (indicatorEngine && holdings.length > 0) {
+        for (const holding of holdings) {
+          try {
+            const result = await indicatorEngine.evaluate(holding.tradingsymbol);
+            if (result.passed || result.score >= 80) {
+               actionableStocks.push(`${holding.tradingsymbol} (${result.score}/100)`);
+            }
+          } catch (err) {}
+        }
+        if (actionableStocks.length > 0) {
+           portfolioActionSection = `\n<b>👀 Actionable Portfolio Stocks:</b>\n${actionableStocks.join(', ')}\n`;
+        }
+      }
+    } catch (err) {}
   }
 
   const message =
     `🌙 <b>End of Day Summary</b>\n` +
     `━━━━━━━━━━━━━━━━\n` +
     `${positionsSection}` +
-    `${ordersSection}\n` +
+    `${ordersSection}` +
+    `${portfolioActionSection}\n` +
     `Market closed. See you tomorrow! 👋`;
 
   await notifyOwner(message);

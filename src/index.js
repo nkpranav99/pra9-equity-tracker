@@ -61,7 +61,6 @@ async function main() {
     bot.start({
       onStart: (botInfo) => {
         logger.info(`🤖 Bot @${botInfo.username} started successfully`);
-        services.notifyOwner(`🤖 <b>Bot Started</b>\n\nI am now online and ready to trade.`);
       }
     });
 

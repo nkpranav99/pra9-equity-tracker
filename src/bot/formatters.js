@@ -222,7 +222,8 @@ export function formatStockCheck(symbol, indicatorResults) {
     const prefix = i === results.length - 1 ? '└' : '├';
     const emoji = c.passed ? '✅' : '❌';
     const wt = c.weight ? ` [${c.weight} pts]` : (c.mandatory ? ` [Mandatory]` : '');
-    return `${prefix} ${escapeHtml(c.name)}${wt}: ${emoji} ${escapeHtml(c.detail || '')}`;
+    const dataPoints = (c.currentValue !== null && c.currentValue !== undefined) ? ` (${c.currentValue})` : '';
+    return `${prefix} ${escapeHtml(c.name)}${wt}: ${emoji}${dataPoints} ${escapeHtml(c.description || '')}`;
   });
 
   return [

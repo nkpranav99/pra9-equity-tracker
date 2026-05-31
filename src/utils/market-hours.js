@@ -24,13 +24,47 @@ export function isMarketOpen() {
 }
 
 /**
+ * Known NSE Public Holidays for 2026 (YYYY-MM-DD format)
+ * Source: NSE India Holiday Calendar
+ */
+const NSE_HOLIDAYS_2026 = [
+  '2026-01-26', // Republic Day
+  '2026-03-03', // Maha Shivaratri
+  '2026-03-24', // Holi
+  '2026-04-03', // Good Friday
+  '2026-04-14', // Dr. Baba Saheb Ambedkar Jayanti
+  '2026-04-21', // Id-ul-Fitr (Ramzan Id)
+  '2026-05-01', // Maharashtra Day
+  '2026-08-15', // Independence Day
+  '2026-09-07', // Ganesh Chaturthi
+  '2026-10-02', // Mahatma Gandhi Jayanti
+  '2026-10-19', // Dussehra
+  '2026-11-08', // Diwali-Balipratipada
+  '2026-11-24', // Gurunanak Jayanti
+  '2026-12-25', // Christmas
+];
+
+/**
  * Check if today is a trading day (weekday, excluding holidays).
- * TODO: Add NSE holiday calendar for complete coverage.
  */
 export function isTradingDay() {
   const now = getNowIST();
   const day = now.getDay();
-  return day !== 0 && day !== 6;
+  
+  // Exclude Weekends
+  if (day === 0 || day === 6) return false;
+
+  // Format today's date to YYYY-MM-DD for holiday check
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${date}`;
+  
+  if (NSE_HOLIDAYS_2026.includes(dateStr)) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
