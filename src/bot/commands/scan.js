@@ -87,8 +87,10 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
       return;
     }
 
+    const totalScanned = scanResults.length;
+
     // Determine dynamic limits
-    const evalLimit = slug === 'all' ? 30 : 20;
+    const evalLimit = slug === 'all' ? 50 : 30;
     const displayLimit = slug === 'all' ? 20 : 10;
 
     // Sort by momentum (changePercent) and cap before evaluation to save API calls
@@ -150,7 +152,7 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
     await ctx.api.editMessageText(
       loadingMsg.chat.id,
       loadingMsg.message_id,
-      formatScanResults(enrichedResults),
+      formatScanResults(enrichedResults, { totalScanned }),
       { parse_mode: 'HTML', reply_markup: keyboard }
     );
   } catch (error) {

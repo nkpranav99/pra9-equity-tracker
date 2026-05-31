@@ -149,9 +149,12 @@ export function formatOrders(orders) {
  * @param {Array<{symbol: string, price: number, changePercent: number,
  *   volume: number, indicatorResults: {passed: boolean, score?: number, maxScore?: number, confidenceLabel?: string, conditions: Array<{name: string, passed: boolean, detail: string}>}
  * }>} results
+ * @param {Object} [meta={}] - Meta info like totalScanned
  * @returns {string} HTML-formatted message
  */
-export function formatScanResults(results) {
+export function formatScanResults(results, meta = {}) {
+  const { totalScanned = 0 } = meta;
+
   if (!results || results.length === 0) {
     return `🔍 <b>Scan Results</b>\n${LINE}\n<i>No stocks matched your screener criteria.</i>`;
   }
@@ -161,11 +164,15 @@ export function formatScanResults(results) {
   
   // Sort qualifying by score descending
   qualifying.sort((a, b) => (b.indicatorResults?.score || 0) - (a.indicatorResults?.score || 0));
+  
+  // Sort partial by momentum descending (since they failed mandatory, score is 0)
+  partial.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
 
   const confidenceEmojis = {
     'Strong': '🟢',
     'Medium': '🟡',
     'Low': '🔴',
+    'Failed Mandatory': '⚠️',
     'None': '⚪'
   };
 
@@ -188,8 +195,10 @@ export function formatScanResults(results) {
     return `\n<b>${title}</b> (${stocks.length})\n${rows.join('\n')}`;
   };
 
+  const scanInfo = totalScanned > 0 ? ` (Top ${results.length} out of ${totalScanned} scanned)` : '';
+
   return [
-    `🔍 <b>Scan Results</b>`,
+    `🔍 <b>Scan Results${scanInfo}</b>`,
     LINE,
     formatGroup(qualifying, '✅ Qualified (By Confidence)', '🎯'),
     formatGroup(partial, '⚠️ Failed Mandatory Rules', '📊'),

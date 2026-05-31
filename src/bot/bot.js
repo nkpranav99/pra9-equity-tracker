@@ -79,8 +79,11 @@ export function setupBot(services) {
 
   // Handle unknown commands gracefully
   bot.on('message', async (ctx) => {
-    if (ctx.message?.text?.startsWith('/')) {
+    const text = ctx.message?.text?.trim()?.toLowerCase();
+    if (text?.startsWith('/')) {
       await ctx.reply('Unrecognized command. Send /help to see available commands.');
+    } else if (text === 'hi' || text === 'hello') {
+      await ctx.reply('Hello there! 👋 I am running and ready. Send /help to see what I can do!');
     }
   });
 
