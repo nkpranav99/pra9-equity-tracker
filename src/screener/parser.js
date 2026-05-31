@@ -56,21 +56,43 @@ export function normalizeSymbol(rawSymbol) {
  *   Normalised stock object, or `null` if the row is invalid / unparseable.
  */
 export function parseChartinkRow(row, columns = DEFAULT_COLUMNS) {
-  if (!Array.isArray(row) || row.length < 2) {
-    logger.warn({ row }, 'Skipping invalid Chartink row (not an array or too short)');
+  if (!row) {
+    logger.warn({ row }, 'Skipping empty Chartink row');
     return null;
   }
 
-  // Build a raw key→value map from the positional arrays
-  const raw = {};
-  columns.forEach((col, idx) => {
-    raw[col] = idx < row.length ? row[idx] : null;
-  });
+  let raw = {};
+  let extra = {};
 
-  // Also capture any extra columns beyond the known mapping
-  const extra = {};
-  for (let i = columns.length; i < row.length; i++) {
-    extra[`col_${i}`] = row[i];
+  if (Array.isArray(row)) {
+    if (row.length < 2) {
+      logger.warn({ row }, 'Skipping invalid Chartink row (array too short)');
+      return null;
+    }
+    // Build a raw key→value map from the positional arrays
+    columns.forEach((col, idx) => {
+      raw[col] = idx < row.length ? row[idx] : null;
+    });
+
+    // Also capture any extra columns beyond the known mapping
+    for (let i = columns.length; i < row.length; i++) {
+      extra[`col_${i}`] = row[i];
+    }
+  } else if (typeof row === 'object') {
+    // New Vue.js Chartink API format returns objects
+    raw = {
+      symbol: row.nsecode || row.bsecode,
+      name: row.name,
+      exchange: row.nsecode ? 'NSE' : 'BSE',
+      price: row.close,
+      changePercent: row.per_chg,
+      volume: row.volume,
+    };
+    // Include all other keys as extra
+    extra = { ...row };
+  } else {
+    logger.warn({ row }, 'Skipping invalid Chartink row (unknown format)');
+    return null;
   }
 
   const symbol = normalizeSymbol(raw.symbol);
