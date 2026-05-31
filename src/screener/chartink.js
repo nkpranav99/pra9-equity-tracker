@@ -133,19 +133,14 @@ class ChartinkScraper {
   // ─── Scan Clause Extraction ────────────────────────────────────
 
   /**
-   * Fetch a specific screener page and extract its `scan_clause`.
-   *
-   * The clause is the Chartink query DSL stored in the page, typically
-   * found in one of these locations (checked in order):
-   *   1. `<textarea>` or `<input>` with id/name containing "scan_clause"
-   *   2. A `<script>` block setting a JS variable containing the clause
+   * Fetch a specific screener page and extract its `scan_clause` and `scan_run_token`.
    *
    * @param {string} slug - Screener slug (URL path component).
-   * @returns {Promise<string>} The raw scan clause string.
-   * @throws {Error} If the page cannot be fetched or the clause is missing.
+   * @returns {Promise<{ scan_clause?: string, scan_run_token?: string }>} The raw scan parameters.
+   * @throws {Error} If the page cannot be fetched or parameters are missing.
    */
-  async _getScanClause(slug) {
-    logger.debug({ slug }, 'Fetching scan clause for screener');
+  async _getScanPayload(slug) {
+    logger.debug({ slug }, 'Fetching scan payload for screener');
 
     const response = await retry(
       () => this.http.get(`/screener/${encodeURIComponent(slug)}`),
@@ -202,31 +197,36 @@ class ChartinkScraper {
       });
     }
 
+    let scanRunToken = '';
+
     // Strategy 3: Look for <scanner :scan-json="{}"> (Chartink's new Vue.js frontend)
-    if (!scanClause) {
-      const scannerNode = $('scanner');
-      if (scannerNode.length) {
-        const scanJsonStr = scannerNode.attr(':scan-json');
-        if (scanJsonStr) {
-          try {
-            const scanJson = JSON.parse(scanJsonStr);
-            scanClause = scanJson.atlas_query || '( {cash} ( ) )';
-          } catch (e) {
-            logger.warn({ err: e.message }, 'Failed to parse scan-json attribute');
+    const scannerNode = $('scanner');
+    if (scannerNode.length) {
+      const scanJsonStr = scannerNode.attr(':scan-json');
+      if (scanJsonStr) {
+        try {
+          const scanJson = JSON.parse(scanJsonStr);
+          if (!scanClause && scanJson.atlas_query) {
+            scanClause = scanJson.atlas_query;
           }
+          if (scanJson.scan_run_token) {
+            scanRunToken = scanJson.scan_run_token;
+          }
+        } catch (e) {
+          logger.warn({ err: e.message }, 'Failed to parse scan-json attribute');
         }
       }
     }
 
-    if (!scanClause) {
-      throw new Error(`Could not extract scan_clause from screener page: ${slug}`);
+    if (!scanClause && !scanRunToken) {
+      throw new Error(`Could not extract scan parameters from screener page: ${slug}`);
     }
 
     logger.debug(
-      { slug, clauseLength: scanClause.length },
-      'Scan clause extracted'
+      { slug, hasClause: !!scanClause, hasToken: !!scanRunToken },
+      'Scan payload extracted'
     );
-    return scanClause;
+    return { scan_clause: scanClause, scan_run_token: scanRunToken };
   }
 
   // ─── Single Screener Scan ─────────────────────────────────────
@@ -259,15 +259,20 @@ class ChartinkScraper {
       // Step 1 — CSRF token (also refreshes session cookies)
       const csrfToken = await this._getCSRFToken();
 
-      // Step 2 — scan clause
-      const scanClause = await this._getScanClause(slug);
+      // Step 2 — scan payload
+      const payload = await this._getScanPayload(slug);
+
+      // Clean undefined/null values from payload
+      const formPayload = {};
+      if (payload.scan_clause) formPayload.scan_clause = payload.scan_clause;
+      if (payload.scan_run_token) formPayload.scan_run_token = payload.scan_run_token;
 
       // Step 3 — POST to /screener/process
       const response = await retry(
         () =>
           this.http.post(
             '/screener/process',
-            new URLSearchParams({ scan_clause: scanClause }).toString(),
+            new URLSearchParams(formPayload).toString(),
             {
               headers: {
                 'X-CSRF-TOKEN': csrfToken,
