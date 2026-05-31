@@ -87,12 +87,16 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
       return;
     }
 
-    // Sort by momentum (changePercent) and cap at Top 15 to avoid overwhelming output
+    // Determine dynamic limits
+    const evalLimit = slug === 'all' ? 30 : 20;
+    const displayLimit = slug === 'all' ? 20 : 10;
+
+    // Sort by momentum (changePercent) and cap before evaluation to save API calls
     scanResults.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
-    scanResults = scanResults.slice(0, 15);
+    scanResults = scanResults.slice(0, evalLimit);
 
     // 2. Evaluate indicators for each result
-    const enrichedResults = [];
+    let enrichedResults = [];
     for (const stock of scanResults) {
       let indicatorResults = null;
       if (indicatorEngine) {
@@ -104,6 +108,20 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
       }
       enrichedResults.push({ ...stock, indicatorResults });
     }
+
+    // Sort enriched results by confidence score descending
+    enrichedResults.sort((a, b) => {
+      const scoreA = a.indicatorResults?.score || 0;
+      const scoreB = b.indicatorResults?.score || 0;
+      // If scores are equal, fallback to momentum
+      if (scoreB === scoreA) {
+        return (b.changePercent || 0) - (a.changePercent || 0);
+      }
+      return scoreB - scoreA;
+    });
+
+    // Cap to final display limit
+    enrichedResults = enrichedResults.slice(0, displayLimit);
 
     // 3. Build inline keyboard with check buttons
     const qualifying = enrichedResults.filter((r) => r.indicatorResults?.passed);
