@@ -110,6 +110,10 @@ class IndicatorEngine {
         const mandatoryPassed = results.filter(r => r.mandatory).every(r => r.passed);
         if (mandatoryPassed) {
           passed = true;
+        } else {
+          passed = false;
+          score = 0; // Reset score if it fails mandatory rules
+          confidenceLabel = 'Failed Mandatory';
         }
       } else {
         // Fallback for strict AND/OR
