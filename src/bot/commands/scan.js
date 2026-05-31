@@ -87,6 +87,10 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
       return;
     }
 
+    // Sort by momentum (changePercent) and cap at Top 15 to avoid overwhelming output
+    scanResults.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
+    scanResults = scanResults.slice(0, 15);
+
     // 2. Evaluate indicators for each result
     const enrichedResults = [];
     for (const stock of scanResults) {
