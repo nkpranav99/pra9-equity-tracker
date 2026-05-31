@@ -1,0 +1,29 @@
+{
+  "name": "equity-bot",
+  "version": "1.0.0",
+  "description": "Personal Indian equity trading assistant — Telegram bot with Chartink screener integration and Kite Connect portfolio management",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/**/*.test.js",
+    "setup-db": "node src/db/migrations.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "better-sqlite3": "^11.0.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^5.2.1",
+    "grammy": "^1.31.0",
+    "kiteconnect": "^5.0.0",
+    "node-cron": "^3.0.3",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "technicalindicators": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
