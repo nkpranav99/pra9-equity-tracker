@@ -83,14 +83,76 @@ export function setupBot(services) {
   // Register callback queries (inline keyboards)
   callbackHandler(bot, services);
 
-  // Handle unknown commands gracefully
+  // Handle plain text natural language commands
   bot.on('message', async (ctx) => {
     const text = ctx.message?.text?.trim()?.toLowerCase();
-    if (text?.startsWith('/')) {
+    if (!text) return;
+
+    if (text.startsWith('/')) {
       await ctx.reply('Unrecognized command. Send /help to see available commands.');
-    } else if (text === 'hi' || text === 'hello') {
-      await ctx.reply('Hello there! 👋 I am running and ready. Send /help to see what I can do!');
+      return;
     }
+
+    if (text === 'hi' || text === 'hello') {
+      await ctx.reply('Hello there! 👋 I am running and ready. Send /help to see what I can do!');
+      return;
+    }
+
+    // -- NLP Intent Matchers --
+    
+    // Watchlist: Add
+    let match = text.match(/(?:add|put|keep)\s+([a-z0-9_-]+)(?:\s+to\s+(?:my\s+)?watchlist)?/);
+    if (match) {
+      ctx.message.text = `/watchlist add ${match[1].toUpperCase()}`;
+      return watchlistCommand(ctx);
+    }
+
+    // Watchlist: Remove
+    match = text.match(/(?:remove|delete|rm)\s+([a-z0-9_-]+)(?:\s+from\s+(?:my\s+)?watchlist)?/);
+    if (match) {
+      ctx.message.text = `/watchlist remove ${match[1].toUpperCase()}`;
+      return watchlistCommand(ctx);
+    }
+
+    // Check / Analyze
+    match = text.match(/(?:check|analyze|eval|evaluate)\s+([a-z0-9_-]+)/);
+    if (match) {
+      ctx.message.text = `/check ${match[1].toUpperCase()}`;
+      return checkCommand(ctx);
+    }
+
+    // Scan Portfolio
+    if (text.includes('scan portfolio') || text.includes('scan my portfolio')) {
+      return scanPortfolioCommand(ctx);
+    }
+
+    // General Scan
+    if (text === 'scan' || text.includes('run scan')) {
+      return scanCommand(ctx);
+    }
+
+    // Summary
+    if (text.includes('summary') || text.includes('eod') || text.includes('pnl')) {
+      return summaryCommand(ctx);
+    }
+
+    // Portfolio
+    if (text.includes('portfolio') || text.includes('holdings')) {
+      return portfolioCommand(ctx);
+    }
+
+    // Positions
+    if (text.includes('positions')) {
+      return positionsCommand(ctx);
+    }
+
+    // Orders
+    if (text.includes('orders')) {
+      return ordersCommand(ctx);
+    }
+
+    // Fallback
+    await ctx.reply('I am not sure what you mean. Try using commands from the menu or type /help.');
   });
 
   return bot;
