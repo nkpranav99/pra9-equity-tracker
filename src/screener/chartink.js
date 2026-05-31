@@ -202,6 +202,22 @@ class ChartinkScraper {
       });
     }
 
+    // Strategy 3: Look for <scanner :scan-json="{}"> (Chartink's new Vue.js frontend)
+    if (!scanClause) {
+      const scannerNode = $('scanner');
+      if (scannerNode.length) {
+        const scanJsonStr = scannerNode.attr(':scan-json');
+        if (scanJsonStr) {
+          try {
+            const scanJson = JSON.parse(scanJsonStr);
+            scanClause = scanJson.atlas_query || '( {cash} ( ) )';
+          } catch (e) {
+            logger.warn({ err: e.message }, 'Failed to parse scan-json attribute');
+          }
+        }
+      }
+    }
+
     if (!scanClause) {
       throw new Error(`Could not extract scan_clause from screener page: ${slug}`);
     }
