@@ -23,7 +23,7 @@ async function main() {
     logger.info('Database initialized and migrations applied');
 
     // 3. Initialize Services
-    const kiteClient = new KiteClient();
+    const kiteClient = new KiteClient(config.kite.apiKey, config.kite.apiSecret);
     const kiteAuth = new KiteAuth(kiteClient, config.kite);
     const screener = new ChartinkScraper();
     const indicatorEngine = new IndicatorEngine();
