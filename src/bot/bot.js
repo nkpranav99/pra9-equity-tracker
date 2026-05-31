@@ -13,6 +13,8 @@ import checkCommand from './commands/check.js';
 import watchlistCommand from './commands/watchlist.js';
 import helpCommand from './commands/help.js';
 import loginCommand from './commands/login.js';
+import summaryCommand from './commands/summary.js';
+import scanPortfolioCommand from './commands/scan_portfolio.js';
 
 // Import callback handler
 import callbackHandler from './callbacks/handler.js';
@@ -60,6 +62,8 @@ export function setupBot(services) {
   bot.command('watchlist', watchlistCommand);
   bot.command('help', helpCommand);
   bot.command('login', loginCommand);
+  bot.command('summary', summaryCommand);
+  bot.command('scan_portfolio', scanPortfolioCommand);
 
   // Set up the autocomplete menu in Telegram
   bot.api.setMyCommands([
@@ -68,6 +72,8 @@ export function setupBot(services) {
     { command: 'positions', description: 'View today\'s positions' },
     { command: 'orders', description: 'View today\'s orders' },
     { command: 'scan', description: 'Run Chartink screener & indicators' },
+    { command: 'scan_portfolio', description: 'Run indicators on all holdings' },
+    { command: 'summary', description: 'Get an instant portfolio/P&L summary' },
     { command: 'check', description: 'Check a specific stock symbol' },
     { command: 'watchlist', description: 'Manage your watchlist' },
     { command: 'login', description: 'Get the manual Kite login link' },
