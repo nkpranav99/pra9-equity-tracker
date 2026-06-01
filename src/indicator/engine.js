@@ -128,7 +128,7 @@ class IndicatorEngine {
 
     try {
       switch (rule.type) {
-        case 'ROHAN_MOMENTUM_BREAKOUT': {
+        case 'MOMENTUM_BREAKOUT': {
           const { atrPeriod, normLookback, threshold, contractionBars, volPeriod } = rule;
           
           // 1. Calculate ATR

@@ -23,7 +23,7 @@ const rules = {
     {
       id: 'relative_volume_breakout',
       name: 'Relative Volume Breakout',
-      type: 'ROHAN_MOMENTUM_BREAKOUT',
+      type: 'MOMENTUM_BREAKOUT',
       weight: 20,
       mandatory: true,
       atrPeriod: 14,
