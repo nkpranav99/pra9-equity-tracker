@@ -6,7 +6,7 @@
  * structured result with per-condition pass/fail details.
  */
 
-import { RSI, EMA, SMA, MACD, BollingerBands, ADX } from 'technicalindicators';
+import { RSI, EMA, SMA, MACD, BollingerBands, ADX, ATR } from 'technicalindicators';
 import logger from '../utils/logger.js';
 import rules from './rules.js';
 
@@ -128,22 +128,73 @@ class IndicatorEngine {
 
     try {
       switch (rule.type) {
-        case 'RELATIVE_VOLUME_BREAKOUT': {
-          const { avgVolumePeriod, quietPeriods, quietThreshold, spikeMultiplier } = rule;
-          const len = volume.length;
+        case 'ROHAN_MOMENTUM_BREAKOUT': {
+          const { atrPeriod, normLookback, threshold, contractionBars, volPeriod } = rule;
+          
+          // 1. Calculate ATR
+          const atr = ATR.calculate({ high, low, close, period: atrPeriod });
+          if (atr.length < normLookback + contractionBars + 1) {
+            throw new Error(`Not enough data for ATR or normLookback in ${rule.id}`);
+          }
+          
+          // ATR array is shorter than close array by atrPeriod - 1
+          // Let's pad it to align indices
+          const paddedAtr = new Array(close.length - atr.length).fill(null).concat(atr);
 
-          const recentVols = volume.slice(len - avgVolumePeriod - 1, len - 1);
-          const avgVol = recentVols.reduce((a, b) => a + b, 0) / recentVols.length;
+          // 2. Calculate raw momentum per bar
+          const rawMomentum = new Array(close.length).fill(null);
+          for (let i = 1; i < close.length; i++) {
+            if (paddedAtr[i] !== null) {
+              rawMomentum[i] = Math.abs(close[i] - close[i - 1]) / paddedAtr[i];
+            }
+          }
 
-          const quietWindow = volume.slice(len - quietPeriods - 1, len - 1);
-          const wasQuiet = quietWindow.every(v => v < avgVol * quietThreshold);
+          // 3. Normalise to 0–10 scale
+          const normValue = new Array(close.length).fill(null);
+          for (let i = normLookback; i < close.length; i++) {
+            if (rawMomentum[i] === null) continue;
+            
+            // Get rolling max over the last `normLookback` bars (including current)
+            let rollingMax = -Infinity;
+            for (let j = i - normLookback + 1; j <= i; j++) {
+              if (rawMomentum[j] > rollingMax) {
+                rollingMax = rawMomentum[j];
+              }
+            }
+            
+            if (rollingMax > 0) {
+              let val = (rawMomentum[i] / rollingMax) * 10;
+              normValue[i] = Math.min(val, 10);
+            } else {
+              normValue[i] = 0;
+            }
+          }
 
-          const todayVol = volume[len - 1];
-          const spikeRatio = todayVol / avgVol;
+          const len = close.length;
+          const todayNorm = normValue[len - 1];
 
-          currentValue = spikeRatio;
-          rulePassed = wasQuiet && spikeRatio >= spikeMultiplier;
-          details = `Spike ratio: ${spikeRatio.toFixed(2)}x avg | Quiet before: ${wasQuiet}`;
+          // 4. Detect contraction -> expansion
+          let contractionDetected = true;
+          for (let i = len - contractionBars - 1; i <= len - 2; i++) {
+            if (normValue[i] === null || normValue[i] >= threshold) {
+              contractionDetected = false;
+              break;
+            }
+          }
+          
+          // 5. Volume confirmation
+          const recentVols = volume.slice(len - volPeriod - 1, len - 1);
+          const volumeMA = recentVols.reduce((a, b) => a + b, 0) / recentVols.length;
+          const volConfirmed = volume[len - 1] > volumeMA;
+          
+          // Final rule check
+          rulePassed = contractionDetected && todayNorm >= threshold && volConfirmed;
+          currentValue = todayNorm !== null ? todayNorm : 0;
+          
+          const isGreen = close[len - 1] >= close[len - 2];
+          const color = isGreen ? '🟢' : '🔴';
+          
+          details = `Norm Score: ${currentValue.toFixed(2)} ${color} | Contraction: ${contractionDetected} | Vol > MA: ${volConfirmed}`;
           break;
         }
 

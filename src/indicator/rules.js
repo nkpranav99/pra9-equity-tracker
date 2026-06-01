@@ -23,14 +23,15 @@ const rules = {
     {
       id: 'relative_volume_breakout',
       name: 'Relative Volume Breakout',
-      type: 'RELATIVE_VOLUME_BREAKOUT',
+      type: 'ROHAN_MOMENTUM_BREAKOUT',
       weight: 20,
       mandatory: true,
-      avgVolumePeriod: 20,       // Rolling window for average volume
-      quietPeriods: 4,           // Days volume must be below quietThreshold before the spike
-      quietThreshold: 0.85,      // Below 85% of avg volume = "quiet"
-      spikeMultiplier: 2.0,      // Today's volume >= 2x avg = breakout spike
-      description: 'Detects volume contraction followed by an explosive expansion. Quiet volume for 4 days, then today\'s volume >= 2x the 20-day average.',
+      atrPeriod: 14,
+      normLookback: 50,
+      threshold: 2.0,
+      contractionBars: 3,
+      volPeriod: 20,
+      description: 'Detects a volatility contraction (3 bars < 2.0) followed by a momentum expansion (>= 2.0) with volume confirmation (> 20-day MA).',
     },
     {
       id: 'ema_trend_alignment',
