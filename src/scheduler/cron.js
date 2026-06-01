@@ -301,6 +301,8 @@ async function runMorningBriefing(services) {
     } catch (err) {
       portfolioSection = '\n<i>⚠️ Could not fetch portfolio data</i>\n';
     }
+  } else {
+    portfolioSection = '\n<i>⚠️ Kite is not authenticated. Run /login to view portfolio snapshot.</i>\n';
   }
 
   const message =
@@ -366,6 +368,8 @@ async function runEodSummary(services) {
         }
       }
     } catch (err) {}
+  } else {
+    positionsSection = '<i>⚠️ Kite is not authenticated. Run /login to connect your account and view portfolio data.</i>\n';
   }
 
   const message =
