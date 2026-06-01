@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, session } from 'grammy';
 import config from '../config.js';
 import logger from '../utils/logger.js';
 import { handleError } from '../utils/error-handler.js';
@@ -16,6 +16,7 @@ import loginCommand from './commands/login.js';
 import summaryCommand from './commands/summary.js';
 import discoverCommand from './commands/discover.js';
 import scanPortfolioCommand from './commands/scan_portfolio.js';
+import { buyCommand, sellCommand, tradeConversationHandler } from './commands/trade.js';
 
 // Import callback handler
 import callbackHandler from './callbacks/handler.js';
@@ -38,6 +39,8 @@ export function setupBot(services) {
       handleError(e, 'Bot core', services.notifyOwner).catch(() => {});
     }
   });
+
+  bot.use(session({ initial: () => ({ tradeState: null }) }));
 
   // Global Middleware: Auth check & Service injection
   bot.use(async (ctx, next) => {
@@ -66,10 +69,14 @@ export function setupBot(services) {
   bot.command('login', loginCommand);
   bot.command('summary', summaryCommand);
   bot.command('scan_portfolio', scanPortfolioCommand);
+  bot.command('buy', buyCommand);
+  bot.command('sell', sellCommand);
 
   // Set up the autocomplete menu in Telegram
   bot.api.setMyCommands([
     { command: 'start', description: 'Start the bot' },
+    { command: 'buy', description: 'Buy a stock' },
+    { command: 'sell', description: 'Sell a stock' },
     { command: 'portfolio', description: 'View current holdings' },
     { command: 'positions', description: 'View today\'s positions' },
     { command: 'orders', description: 'View today\'s orders' },
@@ -88,6 +95,11 @@ export function setupBot(services) {
 
   // Handle plain text natural language commands
   bot.on('message', async (ctx) => {
+    // If we're in the middle of a trade conversation, route it there
+    if (ctx.session?.tradeState?.active) {
+      return tradeConversationHandler(ctx);
+    }
+
     const text = ctx.message?.text?.trim()?.toLowerCase();
     if (!text) return;
 
@@ -162,6 +174,20 @@ export function setupBot(services) {
     // Orders
     if (text.includes('orders')) {
       return ordersCommand(ctx);
+    }
+
+    // Buy
+    match = text.match(/^buy(?:\s+(.+))?$/);
+    if (match) {
+      ctx.message.text = match[1] ? `/buy ${match[1].toUpperCase()}` : '/buy';
+      return buyCommand(ctx);
+    }
+
+    // Sell
+    match = text.match(/^sell(?:\s+(.+))?$/);
+    if (match) {
+      ctx.message.text = match[1] ? `/sell ${match[1].toUpperCase()}` : '/sell';
+      return sellCommand(ctx);
     }
 
     // Fallback

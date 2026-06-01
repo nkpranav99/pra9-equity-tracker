@@ -59,6 +59,33 @@ export default function registerCallbackHandlers(bot, services) {
         return;
       }
 
+      // --- Trade Flow Callbacks ---
+      if (data.startsWith('trade_product_')) {
+        const product = data.replace('trade_product_', '');
+        const { handleProductSelection } = await import('../commands/trade.js');
+        await handleProductSelection(ctx, product);
+        return;
+      }
+
+      if (data.startsWith('trade_type_')) {
+        const orderType = data.replace('trade_type_', '');
+        const { handleTypeSelection } = await import('../commands/trade.js');
+        await handleTypeSelection(ctx, orderType);
+        return;
+      }
+
+      if (data === 'trade_execute') {
+        const { executeTrade } = await import('../commands/trade.js');
+        await executeTrade(ctx);
+        return;
+      }
+
+      if (data === 'trade_cancel') {
+        const { cancelTrade } = await import('../commands/trade.js');
+        await cancelTrade(ctx);
+        return;
+      }
+
       // --- Watchlist Remove ---
       if (data.startsWith('watchlist_remove_')) {
         const symbol = data.replace('watchlist_remove_', '');
