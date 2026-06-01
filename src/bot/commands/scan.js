@@ -69,12 +69,38 @@ export async function executeScan(ctx, services, slug, editMessageId = null) {
   }
 
   try {
-    // 1. Run the scan
-    let scanResults;
-    if (slug === 'all') {
-      scanResults = await screener.scanAll();
+    // 1. Run the scans concurrently
+    let scanResults = [];
+    
+    // Create promises for both scanners
+    const chartinkPromise = slug === 'all' ? screener.scanAll() : screener.scanScreener(slug);
+    
+    // Only run market depth if we are scanning all, to avoid doing discovery on narrow scans unless requested
+    const depthPromise = (slug === 'all' && services.marketDepthScreener) 
+      ? services.marketDepthScreener.scan() 
+      : Promise.resolve([]);
+
+    const [chartinkOutcome, depthOutcome] = await Promise.allSettled([chartinkPromise, depthPromise]);
+
+    if (chartinkOutcome.status === 'fulfilled' && chartinkOutcome.value) {
+      chartinkOutcome.value.forEach(stock => {
+        stock.source = 'chartink';
+        scanResults.push(stock);
+      });
     } else {
-      scanResults = await screener.scanScreener(slug);
+      logger.error({ err: chartinkOutcome.reason }, 'Chartink scan failed');
+    }
+
+    if (depthOutcome.status === 'fulfilled' && depthOutcome.value) {
+      depthOutcome.value.forEach(stock => {
+        // Only add if not already found by Chartink
+        if (!scanResults.some(s => s.symbol === stock.symbol)) {
+          stock.source = 'discovery';
+          scanResults.push(stock);
+        }
+      });
+    } else {
+      logger.error({ err: depthOutcome.reason }, 'Market Depth scan failed');
     }
 
     if (!scanResults || scanResults.length === 0) {

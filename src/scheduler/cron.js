@@ -49,6 +49,21 @@ export function setupCronJobs(services) {
     { timezone: config.market.timezone }
   );
 
+  // ─── Market Discovery Scan (9:20 AM IST, Mon-Fri) ───
+  cron.schedule(
+    '20 9 * * 1-5',
+    async () => {
+      if (!isTradingDay()) return;
+      logger.info('⏰ Cron: Market Discovery scan triggered');
+      try {
+        await runDiscoveryScan(services);
+      } catch (err) {
+        logger.error({ err }, 'Cron: Market Discovery scan failed');
+      }
+    },
+    { timezone: config.market.timezone }
+  );
+
   // ─── Post-Market Screener Scan (3:45 PM IST, Mon-Fri) ───
   cron.schedule(
     '45 15 * * 1-5',
@@ -173,6 +188,62 @@ async function runScreenerScan(services) {
     }
   } else {
     logger.info('No qualifying stocks in this scan');
+  }
+}
+
+/**
+ * Run discovery scan -> indicator evaluation -> alert pipeline.
+ */
+async function runDiscoveryScan(services) {
+  const { marketDepthScreener, indicatorEngine, notifyOwner } = services;
+
+  if (!marketDepthScreener) {
+    logger.warn('Market depth screener not configured, skipping scan');
+    return;
+  }
+
+  const candidates = await marketDepthScreener.scan();
+  logger.info({ count: candidates.length }, 'Discovery returned candidates');
+
+  if (candidates.length === 0) return;
+
+  const qualifying = [];
+  const { wasAlertedToday, logAlert } = await import('../db/queries.js');
+
+  for (const stock of candidates) {
+    try {
+      if (wasAlertedToday(stock.symbol, 'indicator_match')) {
+        continue;
+      }
+      if (indicatorEngine) {
+        const result = await indicatorEngine.evaluate(stock.symbol);
+        if (result.passed) {
+          stock.source = 'discovery';
+          qualifying.push({ stock, indicatorResult: result });
+        }
+      }
+    } catch (err) {
+      logger.error({ symbol: stock.symbol, err: err.message }, 'Failed to evaluate stock for discovery');
+    }
+  }
+
+  if (qualifying.length > 0) {
+    qualifying.sort((a, b) => {
+      const scoreA = a.indicatorResult?.score || 0;
+      const scoreB = b.indicatorResult?.score || 0;
+      if (scoreA === scoreB) {
+        return (b.stock.changePercent || 0) - (a.stock.changePercent || 0);
+      }
+      return scoreB - scoreA;
+    });
+
+    const topQualifying = qualifying.slice(0, 5);
+    for (const { stock, indicatorResult } of topQualifying) {
+      const message = formatAlertMessage(stock, indicatorResult);
+      await notifyOwner(message);
+      logAlert(stock.symbol, 'indicator_match', message);
+      await new Promise((r) => setTimeout(r, 500));
+    }
   }
 }
 
@@ -312,8 +383,12 @@ async function runEodSummary(services) {
  * Format a stock alert message.
  */
 function formatAlertMessage(stock, indicatorResult) {
+  let sourceTag = '';
+  if (stock.source === 'discovery') sourceTag = '🔭 ';
+  else if (stock.source === 'chartink') sourceTag = '📡 ';
+
   let message =
-    `🚨 <b>ALERT: ${stock.symbol}</b>\n` +
+    `🚨 <b>ALERT: ${sourceTag}${stock.symbol}</b>\n` +
     `━━━━━━━━━━━━━━━━\n` +
     `<b>Price:</b> ₹${stock.price}\n`;
 

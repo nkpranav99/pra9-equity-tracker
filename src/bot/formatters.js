@@ -153,10 +153,10 @@ export function formatOrders(orders) {
  * @returns {string} HTML-formatted message
  */
 export function formatScanResults(results, meta = {}) {
-  const { totalScanned = 0 } = meta;
+  const { totalScanned = 0, title = 'Scan Results', subtitle = 'Pre-market Scanner' } = meta;
 
   if (!results || results.length === 0) {
-    return `🔍 <b>Scan Results</b>\n${LINE}\n<i>No stocks matched your screener criteria.</i>`;
+    return `🔍 <b>${title}</b>\n${LINE}\n<i>No stocks matched your screener criteria.</i>`;
   }
 
   const qualifying = results.filter((r) => r.indicatorResults?.passed);
@@ -183,9 +183,14 @@ export function formatScanResults(results, meta = {}) {
     'None': '⚪'
   };
 
-  const formatGroup = (stocks, title, fallbackEmoji) => {
+  const formatGroup = (stocks, groupTitle, fallbackEmoji) => {
     if (stocks.length === 0) return '';
     const rows = stocks.map((s) => {
+      // Determine source tag
+      let tag = '';
+      if (s.source === 'discovery') tag = '🔭 ';
+      else if (s.source === 'chartink') tag = '📡 ';
+
       const sym = escapeHtml(s.symbol);
       const price = formatINR(s.price);
       const pct = s.changePercent ?? 0;
@@ -196,16 +201,19 @@ export function formatScanResults(results, meta = {}) {
       const label = res.confidenceLabel || 'None';
       const emoji = confidenceEmojis[label] || fallbackEmoji;
 
-      return `${emoji} <code>${sym.padEnd(10)}</code> ${price}  ${pctSign}${pct.toFixed(2)}%${scoreStr}`;
+      return `${emoji} ${tag}<code>${sym.padEnd(10)}</code> ${price}  ${pctSign}${pct.toFixed(2)}%${scoreStr}`;
     });
 
-    return `\n<b>${title}</b> (${stocks.length})\n${rows.join('\n')}`;
+    return `\n<b>${groupTitle}</b> (${stocks.length})\n${rows.join('\n')}`;
   };
 
   const scanInfo = totalScanned > 0 ? ` (Top ${results.length} out of ${totalScanned} scanned)` : '';
+  
+  let header = `🔍 <b>${title}${scanInfo}</b>`;
+  if (subtitle) header += `\n<i>${subtitle}</i>`;
 
   return [
-    `🔍 <b>Scan Results${scanInfo}</b>`,
+    header,
     LINE,
     formatGroup(qualifying, '✅ Qualified (By Confidence)', '🎯'),
     formatGroup(partial, '⚠️ Failed Mandatory Rules', '📊'),

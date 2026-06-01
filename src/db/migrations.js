@@ -72,6 +72,14 @@ const MIGRATIONS = [
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(symbol, timeframe)
   )`,
+
+  // ── nse_universe_cache ───────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS nse_universe_cache (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbols     TEXT NOT NULL,
+    fetched_at  INTEGER NOT NULL,
+    index_name  TEXT NOT NULL UNIQUE
+  )`,
 ];
 
 /**

@@ -264,3 +264,55 @@ export function getCachedIndicators(symbol, timeframe, maxAgeMinutes = 30) {
     updated_at: row.updated_at,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  NSE Universe Cache
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Get cached symbols for a specific index if fetched within the last 24 hours.
+ * @param {string} indexName - 'MIDCAP150' or 'SMALLCAP250'
+ * @returns {Array<string>|null} Array of symbols or null if missing/expired
+ */
+export function getUniverseCache(indexName) {
+  const db = getDb();
+  // 24 hours in milliseconds = 86400000
+  const row = db
+    .prepare(
+      `SELECT symbols, fetched_at 
+       FROM nse_universe_cache 
+       WHERE index_name = ?`
+    )
+    .get(indexName);
+
+  if (!row) return null;
+
+  const now = Date.now();
+  if (now - row.fetched_at > 86400000) {
+    return null; // Expired
+  }
+
+  try {
+    return JSON.parse(row.symbols);
+  } catch (err) {
+    logger.error({ err, indexName }, 'Failed to parse cached symbols');
+    return null;
+  }
+}
+
+/**
+ * Cache symbols for a specific index.
+ * @param {string} indexName - 'MIDCAP150' or 'SMALLCAP250'
+ * @param {Array<string>} symbols - Array of stock symbols
+ */
+export function setUniverseCache(indexName, symbols) {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO nse_universe_cache (symbols, fetched_at, index_name)
+     VALUES (?, ?, ?)
+     ON CONFLICT(index_name) DO UPDATE SET
+       symbols = excluded.symbols,
+       fetched_at = excluded.fetched_at`
+  ).run(JSON.stringify(symbols), Date.now(), indexName);
+  logger.debug({ indexName, count: symbols.length }, 'NSE universe cached');
+}

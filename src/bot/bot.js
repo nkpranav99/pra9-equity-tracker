@@ -14,6 +14,7 @@ import watchlistCommand from './commands/watchlist.js';
 import helpCommand from './commands/help.js';
 import loginCommand from './commands/login.js';
 import summaryCommand from './commands/summary.js';
+import discoverCommand from './commands/discover.js';
 import scanPortfolioCommand from './commands/scan_portfolio.js';
 
 // Import callback handler
@@ -58,6 +59,7 @@ export function setupBot(services) {
   bot.command('positions', positionsCommand);
   bot.command('orders', ordersCommand);
   bot.command('scan', scanCommand);
+  bot.command('discover', discoverCommand);
   bot.command('check', checkCommand);
   bot.command('watchlist', watchlistCommand);
   bot.command('help', helpCommand);
@@ -72,6 +74,7 @@ export function setupBot(services) {
     { command: 'positions', description: 'View today\'s positions' },
     { command: 'orders', description: 'View today\'s orders' },
     { command: 'scan', description: 'Run Chartink screener & indicators' },
+    { command: 'discover', description: 'Run market depth discovery scan' },
     { command: 'scan_portfolio', description: 'Run indicators on all holdings' },
     { command: 'summary', description: 'Get an instant portfolio/P&L summary' },
     { command: 'check', description: 'Check a specific stock symbol' },
@@ -124,6 +127,11 @@ export function setupBot(services) {
     // Scan Portfolio
     if (text.includes('scan portfolio') || text.includes('scan my portfolio')) {
       return scanPortfolioCommand(ctx);
+    }
+
+    // Discover / Deep Scan
+    if (text === 'discover' || text.includes('market scan') || text.includes('find stocks') || text.includes('deep scan') || text.includes('universe scan')) {
+      return discoverCommand(ctx);
     }
 
     // General Scan
