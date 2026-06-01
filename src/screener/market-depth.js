@@ -7,7 +7,7 @@ import { retry } from '../utils/error-handler.js';
 import { getUniverseCache, setUniverseCache } from '../db/queries.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FALLBACK_FILE = path.join(__dirname, '..', 'data', 'nse-universe.json');
+const FALLBACK_FILE = path.join(__dirname, '..', 'static', 'nse-universe.json');
 
 /**
  * Market Depth Scanner
