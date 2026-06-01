@@ -120,9 +120,15 @@ class MarketDepthScreener {
     try {
       if (fs.existsSync(FALLBACK_FILE)) {
         const raw = fs.readFileSync(FALLBACK_FILE, 'utf8');
-        const data = JSON.parse(raw);
+        let data = JSON.parse(raw);
         logger.info({ count: data.length }, 'Loaded universe from static fallback JSON');
         
+        // Shuffle the data randomly so we don't evaluate the same 30 stocks every time NSE is blocked
+        for (let i = data.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [data[i], data[j]] = [data[j], data[i]];
+        }
+
         // Since static JSON might not have live prices, return minimal stub objects
         // We will just bypass pre-filter for these since they lack live data
         return data.map(symbol => ({
