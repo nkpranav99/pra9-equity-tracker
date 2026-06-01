@@ -15,7 +15,8 @@ const FALLBACK_FILE = path.join(__dirname, '..', 'static', 'nse-universe.json');
  * Applies lightweight pre-filtering before sending to indicator engine.
  */
 class MarketDepthScreener {
-  constructor() {
+  constructor(kiteClient) {
+    this.kiteClient = kiteClient;
     this._cookies = [];
     
     this.http = axios.create({
@@ -114,37 +115,51 @@ class MarketDepthScreener {
   }
 
   /**
-   * Load fallback data from static JSON
+   * Load fallback data and fetch live prices from Kite
    */
-  _loadFallback() {
-    try {
-      if (fs.existsSync(FALLBACK_FILE)) {
-        const raw = fs.readFileSync(FALLBACK_FILE, 'utf8');
-        let data = JSON.parse(raw);
-        logger.info({ count: data.length }, 'Loaded universe from static fallback JSON');
-        
-        // Shuffle the data randomly so we don't evaluate the same 30 stocks every time NSE is blocked
-        for (let i = data.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [data[i], data[j]] = [data[j], data[i]];
-        }
+  async _loadFallback() {
+    if (!this.kiteClient || !this.kiteClient.isAuthenticated) {
+      throw new Error('NSE API blocked and Kite is not authenticated. Cannot fallback to live data.');
+    }
 
-        // Since static JSON might not have live prices, return minimal stub objects
-        // We will just bypass pre-filter for these since they lack live data
-        return data.map(symbol => ({
-          symbol,
-          lastPrice: 999,
-          totalTradedVolume: 999999, // pass liquidity check
-          previousClose: 100, // stub
-          yearHigh: 1000, // stub
-          pChange: 3.0 // force pass pre-filter
-        }));
+    if (!fs.existsSync(FALLBACK_FILE)) {
+      throw new Error('Fallback JSON file not found');
+    }
+
+    const raw = fs.readFileSync(FALLBACK_FILE, 'utf8');
+    const symbols = JSON.parse(raw);
+    logger.info({ count: symbols.length }, 'Loaded symbols from static fallback JSON. Fetching live quotes from Kite...');
+
+    // Kite's getQuote takes an array of strings e.g. ["NSE:RELIANCE", "NSE:TCS"]
+    const kiteSymbols = symbols.map(s => `NSE:${s}`);
+    
+    try {
+      const quotes = await this.kiteClient.getQuote(kiteSymbols);
+      const data = [];
+
+      for (const symbol of symbols) {
+        const q = quotes[`NSE:${symbol}`];
+        if (q) {
+          // Kite doesn't provide 52W high/low in getQuote, so we will stub yearHigh to allow
+          // structure check to fail or pass based on other conditions (pChange and Volume)
+          const pChange = q.ohlc.close > 0 ? ((q.last_price - q.ohlc.close) / q.ohlc.close) * 100 : 0;
+          
+          data.push({
+            symbol,
+            lastPrice: q.last_price,
+            totalTradedVolume: q.volume,
+            previousClose: q.ohlc.close,
+            yearHigh: q.upper_circuit_limit * 1.5, // Dummy value that guarantees structure pre-filter fails so momentum/volume must pass
+            pChange: pChange
+          });
+        }
       }
-      logger.warn('Fallback JSON file not found');
-      return [];
+
+      logger.info({ count: data.length }, 'Successfully fetched live fallback quotes from Kite');
+      return data;
     } catch (err) {
-      logger.error({ err }, 'Failed to load fallback JSON');
-      return [];
+      logger.error({ err: err.message }, 'Failed to fetch live quotes from Kite for fallback');
+      throw err;
     }
   }
 
@@ -163,7 +178,7 @@ class MarketDepthScreener {
       smallcap = await this._fetchIndex('NIFTY SMALLCAP 250');
     } catch (err) {
       logger.warn('NSE API blocked or failed, falling back to static universe JSON');
-      const fallbackData = this._loadFallback();
+      const fallbackData = await this._loadFallback();
       midcap = fallbackData; // Just assign all to midcap to pass through
     }
 

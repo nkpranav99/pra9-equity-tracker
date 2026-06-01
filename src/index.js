@@ -28,7 +28,7 @@ async function main() {
     const kiteClient = new KiteClient(config.kite.apiKey, config.kite.apiSecret);
     const kiteAuth = new KiteAuth(kiteClient, config.kite);
     const screener = new ChartinkScraper();
-    const marketDepthScreener = new MarketDepthScreener();
+    const marketDepthScreener = new MarketDepthScreener(kiteClient);
     const dataFetcher = new DataFetcher(kiteClient);
     const indicatorEngine = new IndicatorEngine(dataFetcher);
 
