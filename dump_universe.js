@@ -1,23 +1,24 @@
-import MarketDepthScreener from './src/screener/market-depth.js';
+import axios from 'axios';
 import fs from 'fs';
-import path from 'path';
+
+async function fetchIndex(url) {
+  const res = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+  });
+  const lines = res.data.split('\n').filter(Boolean);
+  // header: Company Name,Industry,Symbol,Series,ISIN Code
+  return lines.slice(1).map(l => l.split(',')[2]?.trim()).filter(Boolean);
+}
 
 async function run() {
-  const screener = new MarketDepthScreener();
   try {
-    const midcap = await screener._fetchIndex('NIFTY MIDCAP 150');
-    await new Promise(r => setTimeout(r, 1000));
-    const smallcap = await screener._fetchIndex('NIFTY SMALLCAP 250');
-    
-    const all = [...midcap, ...smallcap].map(s => s.symbol);
-    const unique = Array.from(new Set(all));
-    
-    fs.writeFileSync('./src/data/nse-universe.json', JSON.stringify(unique, null, 2));
-    console.log(`Saved ${unique.length} symbols to fallback JSON`);
-  } catch (err) {
-    console.error('Failed to dump universe:', err);
-    // fallback dummy
-    fs.writeFileSync('./src/data/nse-universe.json', JSON.stringify(["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"], null, 2));
+    const midcap = await fetchIndex('https://nsearchives.nseindia.com/content/indices/ind_niftymidcap150list.csv');
+    const smallcap = await fetchIndex('https://nsearchives.nseindia.com/content/indices/ind_niftysmallcap250list.csv');
+    const universe = [...new Set([...midcap, ...smallcap])];
+    fs.writeFileSync('src/static/nse-universe.json', JSON.stringify(universe, null, 2));
+    console.log(`Saved ${universe.length} symbols to fallback json.`);
+  } catch(e) {
+    console.error(e.message);
   }
 }
 run();
