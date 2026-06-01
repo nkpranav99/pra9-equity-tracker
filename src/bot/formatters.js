@@ -234,12 +234,16 @@ export function formatStockCheck(symbol, indicatorResults) {
      statusText += ` — ${confidenceLabel} Confidence (${score}/${maxScore})`;
   }
 
-  const conditionLines = (results || []).map((c, i) => {
-    const prefix = i === results.length - 1 ? '└' : '├';
+  const conditionLines = (results || []).map((c) => {
     const emoji = c.passed ? '✅' : '❌';
-    const wt = c.weight ? ` [${c.weight} pts]` : (c.mandatory ? ` [Mandatory]` : '');
-    const dataPoints = (c.currentValue !== null && c.currentValue !== undefined) ? ` (${c.currentValue})` : '';
-    return `${prefix} ${escapeHtml(c.name)}${wt}: ${emoji}${dataPoints} ${escapeHtml(c.description || '')}`;
+    const scoreStr = c.scoreContribution !== undefined 
+      ? ` <i>[${c.scoreContribution} pts]</i>` 
+      : (c.mandatory ? ` <i>[Mandatory]</i>` : '');
+    
+    // threshold contains the engine's dynamic evaluation details
+    const details = c.threshold ? `\n   └ <i>${escapeHtml(c.threshold)}</i>` : '';
+    
+    return `${emoji} <b>${escapeHtml(c.name)}</b>${scoreStr}${details}\n`;
   });
 
   return [
@@ -247,7 +251,8 @@ export function formatStockCheck(symbol, indicatorResults) {
     LINE,
     `<b>Price:</b> ${formatINR(price || 0)}`,
     '',
-    `<b>Indicator Status:</b> ${statusText}`,
+    `<b>Status:</b> ${statusText}`,
+    '',
     ...conditionLines,
   ].join('\n');
 }
