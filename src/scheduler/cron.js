@@ -148,11 +148,22 @@ async function runScreenerScan(services) {
     }
   }
 
-  // 3. Send alerts for qualifying stocks
+  // 3. Send alerts for top 5 qualifying stocks
   if (qualifying.length > 0) {
-    logger.info({ count: qualifying.length }, '🚨 Qualifying stocks found!');
+    // Sort by score descending, fallback to momentum
+    qualifying.sort((a, b) => {
+      const scoreA = a.indicatorResult?.score || 0;
+      const scoreB = b.indicatorResult?.score || 0;
+      if (scoreA === scoreB) {
+        return (b.stock.changePercent || 0) - (a.stock.changePercent || 0);
+      }
+      return scoreB - scoreA;
+    });
 
-    for (const { stock, indicatorResult } of qualifying) {
+    const topQualifying = qualifying.slice(0, 5);
+    logger.info({ count: topQualifying.length, total: qualifying.length }, '🚨 Top qualifying stocks found!');
+
+    for (const { stock, indicatorResult } of topQualifying) {
       const message = formatAlertMessage(stock, indicatorResult);
       await notifyOwner(message);
       logAlert(stock.symbol, 'indicator_match', message);
