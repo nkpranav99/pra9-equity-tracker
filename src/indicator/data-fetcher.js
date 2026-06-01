@@ -43,8 +43,8 @@ try {
  * @type {Record<string, {interval: string, range: string}>}
  */
 const TIMEFRAME_MAP = {
-  daily:  { interval: '1d',  range: '1y'  },
-  '1d':   { interval: '1d',  range: '1y'  },
+  daily:  { interval: '1d',  range: '2y'  },
+  '1d':   { interval: '1d',  range: '2y'  },
   '15m':  { interval: '15m', range: '60d' },
   '1h':   { interval: '1h',  range: '6mo' },
   '5m':   { interval: '5m',  range: '60d' },

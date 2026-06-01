@@ -2,25 +2,15 @@
  * @fileoverview Configurable trading indicator rules definition.
  *
  * This file defines YOUR trading indicator conditions.
- * Customize these rules to match your TradingView indicator.
  * The engine evaluates all conditions — a stock passes only when
  * the logic gate (AND/OR) is satisfied across all conditions.
  *
- * Supported condition types:
- *   - RSI            : Relative Strength Index threshold check
- *   - EMA_ABOVE      : Fast EMA above slow EMA (bullish alignment)
- *   - VOLUME_MULTIPLIER : Current volume vs N-period average
- *   - MACD_SIGNAL    : MACD/Signal line crossover detection
- *   - PRICE_ABOVE_MA : Price above a moving average (SMA or EMA)
- *   - BOLLINGER      : Bollinger Band conditions (reserved for future use)
- *
- * Supported operators: '<', '>', '<=', '>=', '=='
- * Supported MACD signals: 'bullish_crossover', 'bearish_crossover'
+ * Current Logic: WEIGHTED (Confidence Score out of 100)
  */
 
 const rules = {
-  name: 'Relative Volume Breakout Strategy',
-  description: 'Confidence-based strategy relying on a custom volume breakout baseline.',
+  name: 'Multi-Timeframe Breakout Strategy',
+  description: 'Confidence-based strategy relying on a custom volume breakout baseline with secondary confirmations.',
   timeframe: 'daily',
 
   // Confidence thresholds out of 100 max bonus points
@@ -34,70 +24,89 @@ const rules = {
       id: 'relative_volume_breakout',
       name: 'Relative Volume Breakout',
       type: 'RELATIVE_VOLUME_BREAKOUT',
-      avgPeriod: 20,       // Standard length for average volume
-      quietPeriods: 4,     // 4 consecutive days below the line
-      threshold: 2.0,      // The horizontal line value (2x average volume)
-      mandatory: true,     // Must pass for the stock to be considered
-      weight: 20,          // Gives a 20-point head start if volume is strong
-      description: 'Volume ratio crosses 2.0 after being below 2.0 for 4 days, with bullish price',
+      weight: 20,
+      mandatory: true,
+      avgVolumePeriod: 20,       // Rolling window for average volume
+      quietPeriods: 4,           // Days volume must be below quietThreshold before the spike
+      quietThreshold: 0.85,      // Below 85% of avg volume = "quiet"
+      spikeMultiplier: 2.0,      // Today's volume >= 2x avg = breakout spike
+      description: 'Detects volume contraction followed by an explosive expansion. Quiet volume for 4 days, then today\'s volume >= 2x the 20-day average.',
     },
     {
-      id: 'volume_spike',
-      name: 'Volume Spike Confirmation',
-      type: 'VOLUME_MULTIPLIER',
-      period: 20, 
-      operator: '>',
-      multiplier: 1.5,
+      id: 'ema_trend_alignment',
+      name: 'EMA Trend Alignment (21 > 50 > 200)',
+      type: 'EMA_TREND_ALIGNMENT',
+      weight: 14,
       mandatory: false,
-      weight: 16,
-      description: 'Current volume > 1.5x average (confirms momentum)',
+      periods: [21, 50, 200],
+      description: 'Confirms a full bull structure: EMA(21) > EMA(50) > EMA(200).',
     },
     {
-      id: 'rsi_bullish',
-      name: 'RSI Bullish Zone',
-      type: 'RSI',
+      id: 'supertrend_bullish',
+      name: 'Supertrend Bullish Signal',
+      type: 'SUPERTREND_BULLISH',
+      weight: 12,
+      mandatory: false,
+      atrPeriod: 10,
+      multiplier: 3.0,
+      description: 'Price is above the Supertrend indicator line (ATR period=10, mult=3).',
+    },
+    {
+      id: 'rsi_momentum',
+      name: 'RSI Momentum Zone',
+      type: 'RSI_MOMENTUM',
+      weight: 12,
+      mandatory: false,
       period: 14,
-      operator: '>',
-      value: 55,
-      mandatory: false,
-      weight: 16,
-      description: 'RSI(14) > 55 (rules out fakeouts)',
+      minRsi: 55,
+      maxRsi: 75,
+      description: 'RSI(14) must be in the momentum sweet-spot: 55-75.',
     },
     {
-      id: 'ema_9_10_cross',
-      name: 'Short-Term Momentum',
-      type: 'EMA_ABOVE',
-      fastPeriod: 9,
-      slowPeriod: 10,
+      id: 'macd_histogram_acceleration',
+      name: 'MACD Histogram Acceleration',
+      type: 'MACD_HISTOGRAM_ACCELERATION',
+      weight: 10,
       mandatory: false,
-      weight: 16,
-      description: 'EMA(9) > EMA(10)',
-    },
-    {
-      id: 'ema_50_200_cross',
-      name: 'Long-Term Golden Cross',
-      type: 'EMA_ABOVE',
-      fastPeriod: 50,
-      slowPeriod: 200,
-      mandatory: false,
-      weight: 16,
-      description: 'EMA(50) > EMA(200)',
-    },
-    {
-      id: 'macd_bullish',
-      name: 'MACD Bullish',
-      type: 'MACD_SIGNAL',
       fastPeriod: 12,
       slowPeriod: 26,
       signalPeriod: 9,
-      signal: 'bullish_crossover',
+      description: 'MACD histogram is positive AND growing (today\'s histogram > yesterday\'s).',
+    },
+    {
+      id: 'bollinger_squeeze_breakout',
+      name: 'Bollinger Band Squeeze Breakout',
+      type: 'BOLLINGER_SQUEEZE_BREAKOUT',
+      weight: 10,
       mandatory: false,
-      weight: 16,
-      description: 'MACD line > Signal line',
+      period: 20,
+      stdDev: 2,
+      squeezeLookback: 20,
+      description: 'Detects a Bollinger Band squeeze followed by price breaking above the upper band.',
+    },
+    {
+      id: 'adx_trend_strength',
+      name: 'ADX Trend Strength Filter',
+      type: 'ADX_TREND_STRENGTH',
+      weight: 10,
+      mandatory: false,
+      period: 14,
+      minAdx: 20,
+      strongAdx: 25,
+      description: 'ADX(14) > 20 confirms the move is a directional TREND.',
+    },
+    {
+      id: 'near_52w_high',
+      name: '52-Week High Proximity',
+      type: 'NEAR_52W_HIGH',
+      weight: 12,
+      mandatory: false,
+      lookbackDays: 252,
+      proximityPct: 10,
+      description: 'Price is within 10% of the 52-week high.',
     },
   ],
 
-  // We no longer rely purely on logic: 'AND'. Engine will compute a confidence score.
   logic: 'CONFIDENCE',
 };
 
