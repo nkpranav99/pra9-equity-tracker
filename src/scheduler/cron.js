@@ -315,13 +315,28 @@ function formatAlertMessage(stock, indicatorResult) {
     message += `<b>Volume:</b> ${stock.volume.toLocaleString?.('en-IN') || stock.volume}\n`;
   }
 
-  if (indicatorResult?.results) {
-    message += `\n<b>✅ ALL CONDITIONS MET</b>\n`;
-    for (const r of indicatorResult.results) {
-      const icon = r.passed ? '✅' : '❌';
-      message += `${icon} ${r.name}: ${r.currentValue ?? 'N/A'}`;
-      if (r.threshold) message += ` (${r.threshold})`;
-      message += '\n';
+  if (indicatorResult) {
+    const scoreStr = indicatorResult.score !== undefined ? ` [${indicatorResult.score}/${indicatorResult.maxScore}]` : '';
+    const label = indicatorResult.confidenceLabel || '';
+    
+    // If it passed all conditions, show a simple success message
+    const allPassed = indicatorResult.results?.every(r => r.passed);
+    if (allPassed) {
+      message += `\n<b>✅ ALL CONDITIONS MET${scoreStr}</b>\n`;
+    } else {
+      message += `\n<b>✅ QUALIFIED SETUP${scoreStr}</b>\n`;
+      if (label) {
+        message += `<b>Confidence:</b> ${label}\n`;
+      }
+      
+      // Optionally just list the ones that failed to keep it concise
+      const failed = indicatorResult.results?.filter(r => !r.passed) || [];
+      if (failed.length > 0) {
+        message += `\n<i>Failed Conditions:</i>\n`;
+        for (const r of failed) {
+          message += `❌ ${r.name}\n`;
+        }
+      }
     }
   } else {
     message += `\n<i>Appeared in screener scan</i>\n`;
