@@ -211,6 +211,36 @@ export function getWatchlist() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Kite Authentication
+// ═══════════════════════════════════════════════════════════════
+
+export function saveKiteToken(tokenData) {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO kite_tokens (access_token, public_token, user_id, login_time)
+     VALUES (?, ?, ?, ?)`
+  ).run(tokenData.accessToken, tokenData.publicToken, tokenData.userId, tokenData.loginTime);
+  logger.debug('Kite token saved to db');
+}
+
+export function getLatestKiteToken() {
+  const db = getDb();
+  const row = db.prepare(
+    `SELECT access_token, public_token, user_id, login_time
+     FROM kite_tokens
+     ORDER BY id DESC LIMIT 1`
+  ).get();
+  
+  if (!row) return null;
+  return {
+    accessToken: row.access_token,
+    publicToken: row.public_token,
+    userId: row.user_id,
+    loginTime: row.login_time
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Indicator Cache
 // ═══════════════════════════════════════════════════════════════
 

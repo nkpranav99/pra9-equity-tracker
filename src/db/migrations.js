@@ -17,6 +17,15 @@ const MIGRATIONS = [
     is_valid      INTEGER DEFAULT 1
   )`,
 
+  // ── kite_tokens ──────────────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS kite_tokens (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    access_token  TEXT    NOT NULL,
+    public_token  TEXT,
+    user_id       TEXT,
+    login_time    TEXT
+  )`,
+
   // ── screener_configs ─────────────────────────────────────────
   `CREATE TABLE IF NOT EXISTS screener_configs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

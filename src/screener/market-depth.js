@@ -131,10 +131,17 @@ class MarketDepthScreener {
     logger.info({ count: symbols.length }, 'Loaded symbols from static fallback JSON. Fetching live quotes from Kite...');
 
     // Kite's getQuote takes an array of strings e.g. ["NSE:RELIANCE", "NSE:TCS"]
+    // We chunk it into batches of 100 to prevent URL length limits (GET requests with 400 params can hit 403/414 WAF limits)
     const kiteSymbols = symbols.map(s => `NSE:${s}`);
+    const quotes = {};
     
     try {
-      const quotes = await this.kiteClient.getQuote(kiteSymbols);
+      for (let i = 0; i < kiteSymbols.length; i += 100) {
+        const batch = kiteSymbols.slice(i, i + 100);
+        const batchQuotes = await this.kiteClient.getQuote(batch);
+        Object.assign(quotes, batchQuotes);
+      }
+      
       const data = [];
 
       for (const symbol of symbols) {
