@@ -118,7 +118,7 @@ export function setupBot(services) {
     }
 
     // Check / Analyze
-    match = text.match(/(?:check|analyze|eval|evaluate)\s+([a-z0-9_-]+)/);
+    match = text.match(/(?:check|analyze|eval|evaluate)\s+(.+)/);
     if (match) {
       ctx.message.text = `/check ${match[1].toUpperCase()}`;
       return checkCommand(ctx);
