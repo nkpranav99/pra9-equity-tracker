@@ -140,7 +140,7 @@ class IndicatorEngine {
     try {
       switch (rule.type) {
         case 'RPCI_ROHAN_MOMENTUM': {
-          const { rpciPassThreshold, valuationPassThreshold = 1.5, earningsPowerMinConsistency = 0.55, contractionBars, maxContractionBars, momentumThreshold, atrPeriod, normLookback, volPeriod } = rule;
+          const { rpciPassThreshold, valuationPassThreshold = 1.5, earningsPowerMinConsistency = 0.50, institutionalCandleBodyMultiplier = 1.8, contractionBars, maxContractionBars, momentumThreshold, atrPeriod, normLookback, volPeriod } = rule;
           
           if (!close || close.length < 100) {
             rulePassed = false;
@@ -209,8 +209,8 @@ class IndicatorEngine {
             }
             const consistency = upDays / 60;
             earnPass = consistency >= earningsPowerMinConsistency;
-            if (consistency >= 0.65) earnLabel = 'Strong';
-            else if (consistency >= 0.55) earnLabel = 'Moderate';
+            if (consistency >= 0.60) earnLabel = 'Strong';
+            else if (consistency >= 0.50) earnLabel = 'Moderate';
             else earnLabel = 'Weak';
             // Debug log
             if (global.logger) global.logger.debug({ consistency, upDays, earnPass }, '[EARNINGS RAW]');
@@ -308,7 +308,7 @@ class IndicatorEngine {
               }
               const avgVol = volValidCount > 0 ? (sumVol / volValidCount) : 0;
               
-              if (body > 2.0 * avgBody && cVol > 2.0 * avgVol) {
+              if (body > institutionalCandleBodyMultiplier * avgBody && cVol > 2.0 * avgVol) {
                 instCount++;
               }
             }
@@ -323,7 +323,15 @@ class IndicatorEngine {
           const lastBB = getInd(bb20, 0);
           if (lastBB && lastBB.upper !== undefined) {
             stExtPass = lastClose <= lastBB.upper;
-            if (global.logger) global.logger.debug({ lastClose, upperBB: lastBB.upper, stExtPass }, '[ST EXT RAW]');
+            if (global.logger) {
+              global.logger.debug({ 
+                symbol: rule.symbol || 'UNKNOWN', 
+                close: lastClose, 
+                bbUpper: lastBB.upper, 
+                bbMiddle: lastBB.middle,
+                bbLower: lastBB.lower 
+              }, 'BB debug');
+            }
           }
           if (stExtPass) rpciScore++;
           rpciResults.stExtension = { passed: stExtPass, label: stExtPass ? 'NO' : 'YES' };
