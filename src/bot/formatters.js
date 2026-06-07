@@ -201,7 +201,16 @@ export function formatScanResults(results, meta = {}) {
       const label = res.confidenceLabel || 'None';
       const emoji = confidenceEmojis[label] || fallbackEmoji;
 
-      return `${emoji} ${tag}<code>${sym.padEnd(10)}</code> ${price}  ${pctSign}${pct.toFixed(2)}%${scoreStr}`;
+      let rpciStr = '';
+      if (res.rpciBreakdown) {
+        const { score, label, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage } = res.rpciBreakdown;
+        rpciStr = `\n  📊 RPCI: ${score}/10 — ${label}\n` +
+          `  ${valuation.passed?'✅':'❌'} Valuation · ${earnings.passed?'✅':'❌'} Earnings · ${momentum.passed?'✅':'❌'} Momentum · ${contraction.passed?'✅':'❌'} Contraction\n` +
+          `  ${timeframe.passed?'✅':'❌'} Timeframe · ${outperformance.passed?'✅':'❌'} Outperformance · ${institutional.passed?'✅':'❌'} Institutions(${institutional.label})\n` +
+          `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2\n`;
+      }
+
+      return `${emoji} ${tag}<code>${sym.padEnd(10)}</code> ${price}  ${pctSign}${pct.toFixed(2)}%${scoreStr}${rpciStr}`;
     });
 
     return `\n<b>${groupTitle}</b> (${stocks.length})\n${rows.join('\n')}`;
@@ -254,13 +263,22 @@ export function formatStockCheck(symbol, indicatorResults) {
     return `${emoji} <b>${escapeHtml(c.name)}</b>${scoreStr}${details}\n`;
   });
 
+  let rpciBlock = '';
+  if (indicatorResults.rpciBreakdown) {
+    const { score, label, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage } = indicatorResults.rpciBreakdown;
+    rpciBlock = `\n  📊 <b>RPCI: ${score}/10 — ${label}</b>\n` +
+      `  ${valuation.passed?'✅':'❌'} Valuation · ${earnings.passed?'✅':'❌'} Earnings · ${momentum.passed?'✅':'❌'} Momentum · ${contraction.passed?'✅':'❌'} Contraction\n` +
+      `  ${timeframe.passed?'✅':'❌'} Timeframe · ${outperformance.passed?'✅':'❌'} Outperformance · ${institutional.passed?'✅':'❌'} Institutions(${institutional.label})\n` +
+      `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2\n`;
+  }
+
   return [
     `📈 <b>${escapeHtml(symbol)}</b> — Indicator Check`,
     LINE,
     `<b>Price:</b> ${formatINR(price || 0)}`,
     '',
     `<b>Status:</b> ${statusText}`,
-    '',
+    rpciBlock,
     ...conditionLines,
   ].join('\n');
 }
