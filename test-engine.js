@@ -1,12 +1,18 @@
+import { config } from 'dotenv';
+config();
 import DataFetcher from './src/indicator/data-fetcher.js';
 import IndicatorEngine from './src/indicator/engine.js';
-import rules from './src/indicator/rules.js';
+import { formatStockCheck } from './src/bot/formatters.js';
 
-async function run() {
+async function test() {
   const fetcher = new DataFetcher();
-  const engine = new IndicatorEngine(fetcher, rules);
-  const result = await engine.evaluate('NAM-INDIA');
-  console.log(JSON.stringify(result, null, 2));
+  const engine = new IndicatorEngine(fetcher);
+  
+  try {
+    const res = await engine.evaluate('HIMADRI.NS'); // HIMADRI.NS was referenced
+    console.log(formatStockCheck('HIMADRI.NS', res));
+  } catch (err) {
+    console.error(err);
+  }
 }
-
-run().catch(console.error);
+test();
