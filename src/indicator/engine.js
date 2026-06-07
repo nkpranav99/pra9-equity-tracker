@@ -139,7 +139,7 @@ class IndicatorEngine {
     try {
       switch (rule.type) {
         case 'RPCI_ROHAN_MOMENTUM': {
-          const { rpciPassThreshold, contractionBars, momentumThreshold, atrPeriod, normLookback, volPeriod } = rule;
+          const { rpciPassThreshold, contractionBars, maxContractionBars, momentumThreshold, atrPeriod, normLookback, volPeriod } = rule;
           const len = close.length;
 
           // Helper: safely get value from indicator array aligned to end
@@ -348,18 +348,42 @@ class IndicatorEngine {
 
           const todayNorm = normValue[len - 1] !== null ? normValue[len - 1] : 0;
           
-          let contractionDetected = true;
-          for (let i = len - contractionBars - 1; i <= len - 2; i++) {
-            if (normValue[i] === null || normValue[i] >= momentumThreshold) {
-              contractionDetected = false;
-              break;
-            }
+          let contractionCount = 0;
+          for (let i = len - 2; i >= 0; i--) {
+            if (normValue[i] === null || normValue[i] >= momentumThreshold) break;
+            contractionCount++;
+            if (contractionCount >= maxContractionBars) break;
           }
           
+          const contractionValid = contractionCount >= contractionBars && contractionCount <= maxContractionBars;
+          const expansionValid = todayNorm >= momentumThreshold;
+          const patternDetected = contractionValid && expansionValid;
+          
+          // Short-term resistance check
+          let resistance = -Infinity;
+          for (let i = len - 11; i <= len - 2; i++) {
+            if (i >= 0 && high[i] > resistance) {
+              resistance = high[i];
+            }
+          }
+          const resistanceBreakout = lastClose > resistance;
+          const highConviction = patternDetected && resistanceBreakout;
+          
           // 4. Price Contraction sub-check
-          const contractionPass = contractionDetected && todayNorm >= momentumThreshold;
-          if (contractionPass) rpciScore++;
-          rpciResults.contraction = { passed: contractionPass, label: contractionPass ? 'YES' : 'NO' };
+          if (patternDetected) rpciScore++;
+          
+          let contractionLabel = '';
+          if (patternDetected && highConviction) contractionLabel = 'YES + Breakout';
+          else if (patternDetected && !highConviction) contractionLabel = 'YES';
+          else if (!patternDetected && todayNorm >= momentumThreshold) contractionLabel = 'NO (Already ran)';
+          else if (!patternDetected && contractionCount > maxContractionBars) contractionLabel = 'NO (Pattern stale)';
+          else contractionLabel = 'NO (Building...)';
+          
+          rpciResults.contraction = { passed: patternDetected, label: contractionLabel };
+          rpciResults.patternDetected = patternDetected;
+          rpciResults.highConviction = highConviction;
+          rpciResults.resistanceBreakout = resistanceBreakout;
+          rpciResults.contractionCount = contractionCount;
           
           // ---------------------------------------------------------
           // FINAL EVALUATION
@@ -378,7 +402,7 @@ class IndicatorEngine {
           const condA = rpciScore >= rpciPassThreshold;
           
           // Condition B: Price Contraction = PASS
-          const condB = contractionPass;
+          const condB = patternDetected;
           
           // Condition C: Volume confirmation
           let condC = false;
@@ -394,7 +418,7 @@ class IndicatorEngine {
           const isGreen = close[len - 1] >= close[len - 2];
           const color = isGreen ? '🟢' : '🔴';
           
-          details = `Norm Score: ${currentValue.toFixed(2)} ${color} | Contraction: ${contractionPass} | Vol > MA: ${condC}`;
+          details = `Norm Score: ${currentValue.toFixed(2)} ${color} | Contraction: ${patternDetected} | Vol > MA: ${condC}`;
           
           // Inject rpciBreakdown into rule result object
           // Since the caller expects primitive types usually, we attach it to 'this' or 

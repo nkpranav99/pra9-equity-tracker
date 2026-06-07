@@ -28,6 +28,7 @@ const rules = {
       mandatory: true,
       rpciPassThreshold: 7,
       contractionBars: 3,
+      maxContractionBars: 10,
       momentumThreshold: 5.0,
       atrPeriod: 14,
       normLookback: 50,

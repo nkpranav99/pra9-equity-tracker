@@ -199,15 +199,27 @@ export function formatScanResults(results, meta = {}) {
       const res = s.indicatorResults || {};
       const scoreStr = res.score !== undefined ? ` [${res.score}/${res.maxScore}]` : '';
       const label = res.confidenceLabel || 'None';
-      const emoji = confidenceEmojis[label] || fallbackEmoji;
+      let emoji = confidenceEmojis[label] || fallbackEmoji;
+      if (res.rpciBreakdown?.highConviction) {
+        emoji = '🔥';
+      }
 
       let rpciStr = '';
       if (res.rpciBreakdown) {
-        const { score, label, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage } = res.rpciBreakdown;
-        rpciStr = `\n  📊 RPCI: ${score}/10 — ${label}\n` +
+        const { score, label: rLabel, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage, patternDetected, contractionCount, resistanceBreakout } = res.rpciBreakdown;
+        rpciStr = `\n  📊 RPCI: ${score}/10 — ${rLabel}\n` +
           `  ${valuation.passed?'✅':'❌'} Valuation · ${earnings.passed?'✅':'❌'} Earnings · ${momentum.passed?'✅':'❌'} Momentum · ${contraction.passed?'✅':'❌'} Contraction\n` +
           `  ${timeframe.passed?'✅':'❌'} Timeframe · ${outperformance.passed?'✅':'❌'} Outperformance · ${institutional.passed?'✅':'❌'} Institutions(${institutional.label})\n` +
-          `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2\n`;
+          `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2`;
+          
+        if (patternDetected) {
+          rpciStr += `\n  📉→📈 Contracted ${contractionCount} days → Expansion today`;
+          if (resistanceBreakout) {
+            rpciStr += `\n  🔺 Contraction + Resistance Breakout ✅`;
+          } else {
+            rpciStr += `\n  ⚡ Contraction Detected ✅`;
+          }
+        }
       }
 
       return `${emoji} ${tag}<code>${sym.padEnd(10)}</code> ${price}  ${pctSign}${pct.toFixed(2)}%${scoreStr}${rpciStr}`;
@@ -264,16 +276,31 @@ export function formatStockCheck(symbol, indicatorResults) {
   });
 
   let rpciBlock = '';
+  let titleEmoji = '📈';
   if (indicatorResults.rpciBreakdown) {
-    const { score, label, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage } = indicatorResults.rpciBreakdown;
-    rpciBlock = `\n  📊 <b>RPCI: ${score}/10 — ${label}</b>\n` +
+    if (indicatorResults.rpciBreakdown.highConviction) {
+      titleEmoji = '🔥';
+    }
+    const { score: rScore, label, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage, patternDetected, contractionCount, resistanceBreakout } = indicatorResults.rpciBreakdown;
+    rpciBlock = `\n  📊 <b>RPCI: ${rScore}/10 — ${label}</b>\n` +
       `  ${valuation.passed?'✅':'❌'} Valuation · ${earnings.passed?'✅':'❌'} Earnings · ${momentum.passed?'✅':'❌'} Momentum · ${contraction.passed?'✅':'❌'} Contraction\n` +
       `  ${timeframe.passed?'✅':'❌'} Timeframe · ${outperformance.passed?'✅':'❌'} Outperformance · ${institutional.passed?'✅':'❌'} Institutions(${institutional.label})\n` +
-      `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2\n`;
+      `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2`;
+      
+    if (patternDetected) {
+      rpciBlock += `\n  📉→📈 Contracted ${contractionCount} days → Expansion today`;
+      if (resistanceBreakout) {
+        rpciBlock += `\n  🔺 Contraction + Resistance Breakout ✅\n`;
+      } else {
+        rpciBlock += `\n  ⚡ Contraction Detected ✅\n`;
+      }
+    } else {
+      rpciBlock += '\n'; // Add newline for spacing
+    }
   }
 
   return [
-    `📈 <b>${escapeHtml(symbol)}</b> — Indicator Check`,
+    `${titleEmoji} <b>${escapeHtml(symbol)}</b> — Indicator Check`,
     LINE,
     `<b>Price:</b> ${formatINR(price || 0)}`,
     '',
