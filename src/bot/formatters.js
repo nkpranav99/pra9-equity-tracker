@@ -207,10 +207,10 @@ export function formatScanResults(results, meta = {}) {
       let rpciStr = '';
       if (res.rpciBreakdown) {
         const { score, label: rLabel, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage, patternDetected, contractionCount, resistanceBreakout } = res.rpciBreakdown;
-        rpciStr = `\n  📊 RPCI: ${score}/10 — ${rLabel}\n` +
-          `  ${valuation.passed?'✅':'❌'} Valuation · ${earnings.passed?'✅':'❌'} Earnings · ${momentum.passed?'✅':'❌'} Momentum · ${contraction.passed?'✅':'❌'} Contraction\n` +
-          `  ${timeframe.passed?'✅':'❌'} Timeframe · ${outperformance.passed?'✅':'❌'} Outperformance · ${institutional.passed?'✅':'❌'} Institutions(${institutional.label})\n` +
-          `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2`;
+        rpciStr = `\n  📊 RPCI: ${score || 0}/10 — ${rLabel || 'Unknown'}\n` +
+          `  ${valuation?.passed?'✅':'❌'} Valuation · ${earnings?.passed?'✅':'❌'} Earnings · ${momentum?.passed?'✅':'❌'} Momentum · ${contraction?.passed?'✅':'❌'} Contraction\n` +
+          `  ${timeframe?.passed?'✅':'❌'} Timeframe · ${outperformance?.passed?'✅':'❌'} Outperformance · ${institutional?.passed?'✅':'❌'} Institutions(${institutional?.label || '0'})\n` +
+          `  ${stExtension?.passed?'✅':'❌'} ST Extension · ${ltExtension?.passed?'✅':'❌'} LT Extension · ${stage?.passed?'✅':'❌'} Stage 2`;
           
         if (patternDetected) {
           rpciStr += `\n  📉→📈 Contracted ${contractionCount} days → Expansion today`;
@@ -282,10 +282,10 @@ export function formatStockCheck(symbol, indicatorResults) {
       titleEmoji = '🔥';
     }
     const { score: rScore, label, valuation, earnings, momentum, contraction, timeframe, outperformance, institutional, stExtension, ltExtension, stage, patternDetected, contractionCount, resistanceBreakout } = indicatorResults.rpciBreakdown;
-    rpciBlock = `\n  📊 <b>RPCI: ${rScore}/10 — ${label}</b>\n` +
-      `  ${valuation.passed?'✅':'❌'} Valuation · ${earnings.passed?'✅':'❌'} Earnings · ${momentum.passed?'✅':'❌'} Momentum · ${contraction.passed?'✅':'❌'} Contraction\n` +
-      `  ${timeframe.passed?'✅':'❌'} Timeframe · ${outperformance.passed?'✅':'❌'} Outperformance · ${institutional.passed?'✅':'❌'} Institutions(${institutional.label})\n` +
-      `  ${stExtension.passed?'✅':'❌'} ST Extension · ${ltExtension.passed?'✅':'❌'} LT Extension · ${stage.passed?'✅':'❌'} Stage 2`;
+    rpciBlock = `\n  📊 <b>RPCI: ${rScore || 0}/10 — ${label || 'Unknown'}</b>\n` +
+      `  ${valuation?.passed?'✅':'❌'} Valuation · ${earnings?.passed?'✅':'❌'} Earnings · ${momentum?.passed?'✅':'❌'} Momentum · ${contraction?.passed?'✅':'❌'} Contraction\n` +
+      `  ${timeframe?.passed?'✅':'❌'} Timeframe · ${outperformance?.passed?'✅':'❌'} Outperformance · ${institutional?.passed?'✅':'❌'} Institutions(${institutional?.label || '0'})\n` +
+      `  ${stExtension?.passed?'✅':'❌'} ST Extension · ${ltExtension?.passed?'✅':'❌'} LT Extension · ${stage?.passed?'✅':'❌'} Stage 2`;
       
     if (patternDetected) {
       rpciBlock += `\n  📉→📈 Contracted ${contractionCount} days → Expansion today`;
