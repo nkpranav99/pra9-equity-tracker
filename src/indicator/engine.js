@@ -181,22 +181,24 @@ class IndicatorEngine {
           let rpciScore = 0;
           rpciResults = {};
 
-          // 1. Valuation
+          // 1. Valuation (Fix 2: EMA200 + label adjusted)
           let valPass = false;
           let valLabel = 'N/A';
-          const lastSma200 = getInd(sma200, 0);
-          if (lastSma200) {
-            const ratio = lastClose / lastSma200;
-            valPass = ratio < valuationPassThreshold;
-            if (ratio < 1.0) valLabel = 'Undervalued';
-            else if (ratio < 1.5) valLabel = 'Reasonably valued';
-            else if (ratio < 2.0) valLabel = 'Extended';
-            else valLabel = 'Highly Extended';
+          const lastEma200 = getInd(ema200, 0);
+          if (lastEma200) {
+            const ratio = lastClose / lastEma200;
+            valPass = ratio < 2.0; // PASS if ratio < 2.0
+            if (ratio < 1.2) valLabel = 'Deeply Undervalued';
+            else if (ratio < 1.5) valLabel = 'Undervalued';
+            else if (ratio < 2.0) valLabel = 'Reasonably valued';
+            else valLabel = 'Extended';
+            // Debug log
+            if (global.logger) global.logger.debug({ ratio, valPass }, '[VALUATION RAW]');
           }
           if (valPass) rpciScore++;
           rpciResults.valuation = { passed: valPass, label: valLabel };
 
-          // 2. Earnings Power (Trend Consistency)
+          // 2. Earnings Power (Fix 3: Trend Consistency)
           let earnPass = false;
           let earnLabel = 'N/A';
           const last60 = safeSlice(close, len - 60, len);
@@ -210,6 +212,8 @@ class IndicatorEngine {
             if (consistency >= 0.65) earnLabel = 'Strong';
             else if (consistency >= 0.55) earnLabel = 'Moderate';
             else earnLabel = 'Weak';
+            // Debug log
+            if (global.logger) global.logger.debug({ consistency, upDays, earnPass }, '[EARNINGS RAW]');
           }
           if (earnPass) rpciScore++;
           rpciResults.earnings = { passed: earnPass, label: earnLabel };
@@ -234,29 +238,32 @@ class IndicatorEngine {
                 momLabel = 'Weak';
               }
             }
-            
-            // 6. Outperformance Proxy (evaluating ROC20 here)
-            const outperfPass = roc20 > 8;
-            if (outperfPass) rpciScore++;
-            rpciResults.outperformance = { passed: outperfPass, label: outperfPass ? 'YES' : 'NO' };
-          } else {
-            rpciResults.outperformance = { passed: false, label: 'N/A' };
           }
           if (momPass) rpciScore++;
           rpciResults.momentum = { passed: momPass, label: momLabel };
+          
+          // 6. Outperformance Proxy (Fix 4: ROC60 > 15%)
+          let outperfPass = false;
+          const close60 = safeGet(close, len - 61);
+          if (close60 !== null && close60 > 0) {
+             const roc60 = ((lastClose - close60) / close60) * 100;
+             outperfPass = roc60 > 15;
+             if (global.logger) global.logger.debug({ roc60, outperfPass }, '[OUTPERF RAW]');
+          }
+          if (outperfPass) rpciScore++;
+          rpciResults.outperformance = { passed: outperfPass, label: outperfPass ? 'YES' : 'NO' };
 
           // 5. Timeframe Alignment
           let tfPass = false;
           const lEma21 = getInd(ema21, 0);
           const lEma50 = getInd(ema50, 0);
-          const lEma200 = getInd(ema200, 0);
-          if (lEma21 && lEma50 && lEma200) {
-            tfPass = (lEma21 > lEma50) && (lEma50 > lEma200);
+          if (lEma21 && lEma50 && lastEma200) {
+            tfPass = (lEma21 > lEma50) && (lEma50 > lastEma200);
           }
           if (tfPass) rpciScore++;
           rpciResults.timeframe = { passed: tfPass, label: tfPass ? 'YES' : 'NO' };
 
-          // 7. Institutional Candles
+          // 7. Institutional Candles (Fix 5: Tightened Criteria)
           let instCount = 0;
           if (len >= 20) {
             for (let i = len - 10; i < len; i++) {
@@ -264,33 +271,44 @@ class IndicatorEngine {
               const cClose = safeGet(close, i);
               const cOpen = safeGet(data.opens, i);
               const cVol = safeGet(volume, i);
-              if (cClose === null || cOpen === null || cVol === null) continue;
+              const cHigh = safeGet(high, i);
+              const cLow = safeGet(low, i);
+              if (cClose === null || cOpen === null || cVol === null || cHigh === null || cLow === null) continue;
               
               const isGreen = cClose > cOpen;
               if (!isGreen) continue;
               
               const body = cClose - cOpen;
+              const range = cHigh - cLow;
+              if (range === 0) continue;
+              if (body / range <= 0.6) continue; // must be > 60% of candle range
               
-              // 10-day avg body
+              // 20-day avg body
               let sumBody = 0;
-              for (let j = i - 10; j < i; j++) {
+              let bodyValidCount = 0;
+              for (let j = i - 20; j < i; j++) {
                 const jClose = safeGet(close, j);
                 const jOpen = safeGet(data.opens, j);
                 if (jClose !== null && jOpen !== null) {
                   sumBody += Math.abs(jClose - jOpen);
+                  bodyValidCount++;
                 }
               }
-              const avgBody = sumBody / 10;
+              const avgBody = bodyValidCount > 0 ? (sumBody / bodyValidCount) : 0;
               
               // 20-day avg vol
               let sumVol = 0;
+              let volValidCount = 0;
               for (let j = i - 20; j < i; j++) {
                 const jVol = safeGet(volume, j);
-                if (jVol !== null) sumVol += jVol;
+                if (jVol !== null) {
+                  sumVol += jVol;
+                  volValidCount++;
+                }
               }
-              const avgVol = sumVol / 20;
+              const avgVol = volValidCount > 0 ? (sumVol / volValidCount) : 0;
               
-              if (body > 1.5 * avgBody && cVol > 1.5 * avgVol) {
+              if (body > 2.0 * avgBody && cVol > 2.0 * avgVol) {
                 instCount++;
               }
             }
@@ -298,20 +316,24 @@ class IndicatorEngine {
           const instPass = instCount >= 1;
           if (instPass) rpciScore++;
           rpciResults.institutional = { passed: instPass, label: instCount.toString() };
+          if (global.logger) global.logger.debug({ instCount }, '[INSTITUTIONS RAW]');
 
           // 8. Short-term Extension
           let stExtPass = false; // PASS means NOT overextended
           const lastBB = getInd(bb20, 0);
           if (lastBB && lastBB.upper !== undefined) {
             stExtPass = lastClose <= lastBB.upper;
+            if (global.logger) global.logger.debug({ lastClose, upperBB: lastBB.upper, stExtPass }, '[ST EXT RAW]');
           }
           if (stExtPass) rpciScore++;
           rpciResults.stExtension = { passed: stExtPass, label: stExtPass ? 'NO' : 'YES' };
 
-          // 9. Long-term Extension
-          let ltExtPass = false;
-          if (lastSma200) {
-            ltExtPass = lastClose <= (lastSma200 * 1.5);
+          // 9. Long-term Extension (Fix 6: Use EMA200 ratio)
+          let ltExtPass = false; // PASS means NOT overextended
+          if (lastEma200) {
+            const ratioLT = lastClose / lastEma200;
+            ltExtPass = ratioLT < 2.0; 
+            if (global.logger) global.logger.debug({ ratioLT, ltExtPass }, '[LT EXT RAW]');
           }
           if (ltExtPass) rpciScore++;
           rpciResults.ltExtension = { passed: ltExtPass, label: ltExtPass ? 'NO' : 'YES' };
@@ -319,6 +341,7 @@ class IndicatorEngine {
           // 10. Stage Analysis
           let stagePass = false;
           let stageLabel = 'N/A';
+          const lastSma200 = getInd(sma200, 0);
           if (lastSma200 && lastSma200 > 0 && len >= 210) {
             const sma200_10d_ago = getInd(sma200, 10);
             const sma200_rising = lastSma200 > sma200_10d_ago;
@@ -329,13 +352,13 @@ class IndicatorEngine {
             
             if (lastClose > lastSma200 && sma200_rising && lastClose > lastSma50 && sma50_rising) {
               stagePass = true;
-              stageLabel = 'Stage 2 – Uptrend';
+              stageLabel = 'Stage 2 - Uptrend'; // Matching screenshot capitalization
             } else if (lastClose > lastSma200 && (!sma50_rising || lastClose <= lastSma50)) {
-              stageLabel = 'Stage 3 – Topping';
+              stageLabel = 'Stage 3 - Topping';
             } else if (lastClose < lastSma200 && !sma200_rising) {
-              stageLabel = 'Stage 4 – Downtrend';
+              stageLabel = 'Stage 4 - Downtrend';
             } else if (lastClose < lastSma200 && sma200_rising) { // simplified basing
-              stageLabel = 'Stage 1 – Basing';
+              stageLabel = 'Stage 1 - Basing';
             } else {
               stageLabel = 'Mixed';
             }
@@ -346,6 +369,7 @@ class IndicatorEngine {
           // ---------------------------------------------------------
           // LAYER 2: ROHAN MOMENTUM BAR (and Sub-check 4)
           // ---------------------------------------------------------
+          const { contractionDepthThreshold = 1.5, expansionStrengthThreshold = 2.5 } = rule;
           const atr = ATR.calculate({ high, low, close, period: atrPeriod });
           if (atr.length < normLookback + contractionBars + 1) {
              rulePassed = false;
@@ -381,17 +405,43 @@ class IndicatorEngine {
 
           const todayNorm = safeGet(normValue, len - 1) !== null ? safeGet(normValue, len - 1) : 0;
           
-          let contractionCount = 0;
+          // Calculate contraction count INCLUDING today (for State A)
+          let contractionCountIncToday = 0;
+          for (let i = len - 1; i >= 0; i--) {
+            const val = safeGet(normValue, i);
+            if (val === null || val >= momentumThreshold) break;
+            contractionCountIncToday++;
+            if (contractionCountIncToday >= maxContractionBars + 1) break; 
+          }
+          
+          // Calculate contraction count EXCLUDING today (for State B)
+          let contractionCountBeforeToday = 0;
+          let sumContractionDepth = 0;
           for (let i = len - 2; i >= 0; i--) {
             const val = safeGet(normValue, i);
             if (val === null || val >= momentumThreshold) break;
-            contractionCount++;
-            if (contractionCount >= maxContractionBars) break;
+            contractionCountBeforeToday++;
+            sumContractionDepth += val;
+            if (contractionCountBeforeToday >= maxContractionBars) break;
           }
           
-          const contractionValid = contractionCount >= contractionBars && contractionCount <= maxContractionBars;
-          const expansionValid = todayNorm >= momentumThreshold;
-          const patternDetected = contractionValid && expansionValid;
+          // Quality Check A: Contraction Depth
+          const avgContraction = contractionCountBeforeToday > 0 ? (sumContractionDepth / contractionCountBeforeToday) : 0;
+          const contractionDepthValid = contractionCountBeforeToday > 0 && avgContraction < contractionDepthThreshold;
+          
+          // State A: Is Contraction In Progress? (Sub-check 4)
+          const contractionInProgress = contractionCountIncToday >= contractionBars && contractionCountIncToday <= maxContractionBars;
+          
+          // Quality Check B: Expansion Candle Strength
+          const expansionStrengthValid = todayNorm >= expansionStrengthThreshold;
+          
+          // Quality Check C: Price Candle Confirmation (Green)
+          const todayOpen = safeGet(data.opens, len - 1);
+          const expansionCandleGreen = todayOpen !== null ? lastClose >= todayOpen : false;
+          
+          // State B: Did Expansion Fire Today? (Mandatory Gate)
+          const contractionBeforeTodayValid = contractionCountBeforeToday >= contractionBars && contractionCountBeforeToday <= maxContractionBars;
+          const expansionFiredToday = contractionBeforeTodayValid && todayNorm >= momentumThreshold && contractionDepthValid && expansionStrengthValid && expansionCandleGreen;
           
           // Short-term resistance check
           let resistance = -Infinity;
@@ -402,23 +452,29 @@ class IndicatorEngine {
             }
           }
           const resistanceBreakout = lastClose > resistance;
-          const highConviction = patternDetected && resistanceBreakout;
           
           // 4. Price Contraction sub-check
-          if (patternDetected) rpciScore++;
+          if (contractionInProgress) rpciScore++;
           
           let contractionLabel = '';
-          if (patternDetected && highConviction) contractionLabel = 'YES + Breakout';
-          else if (patternDetected && !highConviction) contractionLabel = 'YES';
-          else if (!patternDetected && todayNorm >= momentumThreshold) contractionLabel = 'NO (Already ran)';
-          else if (!patternDetected && contractionCount > maxContractionBars) contractionLabel = 'NO (Pattern stale)';
-          else contractionLabel = 'NO (Building...)';
+          if (contractionInProgress) {
+            contractionLabel = 'YES';
+          } else if (contractionCountIncToday > 0 && contractionCountIncToday < contractionBars && todayNorm < momentumThreshold) {
+            contractionLabel = 'NO (Building...)';
+          } else if (expansionFiredToday) {
+            contractionLabel = 'NO (Already ran)';
+          } else if (contractionCountIncToday > maxContractionBars) {
+            contractionLabel = 'NO (Stale)';
+          } else {
+            contractionLabel = 'NO';
+          }
           
-          rpciResults.contraction = { passed: patternDetected, label: contractionLabel };
-          rpciResults.patternDetected = patternDetected;
-          rpciResults.highConviction = highConviction;
+          rpciResults.contraction = { passed: contractionInProgress, label: contractionLabel };
+          
+          // Update internal breakdowns for formatter
+          rpciResults.patternDetected = expansionFiredToday;
           rpciResults.resistanceBreakout = resistanceBreakout;
-          rpciResults.contractionCount = contractionCount;
+          rpciResults.contractionCount = contractionCountBeforeToday;
           
           // ---------------------------------------------------------
           // FINAL EVALUATION
@@ -436,8 +492,8 @@ class IndicatorEngine {
           // Condition A: RPCI Score >= 7
           const condA = rpciScore >= rpciPassThreshold;
           
-          // Condition B: Price Contraction = PASS
-          const condB = patternDetected;
+          // Condition B: Price Contraction = PASS (meaning expansion fired today)
+          const condB = expansionFiredToday;
           
           // Condition C: Volume confirmation
           let condC = false;
@@ -450,13 +506,32 @@ class IndicatorEngine {
           }
           
           rulePassed = condA && condB && condC;
+          
+          // 🔥 highConviction requires everything to pass + resistance breakout
+          const highConviction = rulePassed && resistanceBreakout;
+          rpciResults.highConviction = highConviction;
+          
           currentValue = todayNorm;
           
-          const prevClose = safeGet(close, len - 2);
-          const isGreen = prevClose !== null ? (lastClose >= prevClose) : true;
-          const color = isGreen ? '🟢' : '🔴';
+          // Format details string for Telegram Output
+          let contractionStr = '';
+          if (contractionBeforeTodayValid) {
+            contractionStr = `Contraction: ${contractionCountBeforeToday} bars (avg depth: ${avgContraction.toFixed(2)}) ${contractionDepthValid ? '✅' : '❌'}`;
+          } else {
+            contractionStr = `Contraction: ${contractionCountBeforeToday} bars (need ${contractionBars} minimum) ❌`;
+          }
           
-          details = `Norm Score: ${currentValue.toFixed(2)} ${color} | Contraction: ${patternDetected} | Vol > MA: ${condC}`;
+          let expansionStr = '';
+          if (todayNorm >= expansionStrengthThreshold) {
+            expansionStr = `Expansion: normValue=${todayNorm.toFixed(2)} ✅`;
+          } else {
+            expansionStr = `Expansion: normValue=${todayNorm.toFixed(2)} — too weak (need ${expansionStrengthThreshold}) ❌`;
+          }
+          
+          let greenStr = `Green candle: ${expansionCandleGreen ? 'YES ✅' : 'NO ❌'}`;
+          let volStr = `Vol > MA: ${condC ? 'true ✅' : 'false ❌'}`;
+          
+          details = `${contractionStr}\n     ${expansionStr} | ${greenStr}\n     ${volStr}`;
           
           break; // The breakdown will be appended below
         }
