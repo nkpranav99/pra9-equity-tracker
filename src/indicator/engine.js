@@ -42,10 +42,11 @@ class IndicatorEngine {
       const highs = candles.map((c) => c.high);
       const lows = candles.map((c) => c.low);
       const volumes = candles.map((c) => c.volume);
+      const opens = candles.map((c) => c.open);
 
       const results = [];
       for (const condition of this.rules.conditions) {
-        const result = this._evaluateCondition(condition, { closes, highs, lows, volumes, candles });
+        const result = this._evaluateCondition(condition, { closes, highs, lows, volumes, opens, candles });
         result.mandatory = condition.mandatory === true;
         result.weight = condition.weight || 0;
         
@@ -130,7 +131,7 @@ class IndicatorEngine {
   }
 
   _evaluateCondition(rule, data) {
-    const { closes: close, highs: high, lows: low, volumes: volume } = data;
+    const { closes: close, highs: high, lows: low, volumes: volume, opens } = data;
     let rulePassed = false;
     let currentValue = null;
     let details = '';
@@ -139,14 +140,28 @@ class IndicatorEngine {
     try {
       switch (rule.type) {
         case 'RPCI_ROHAN_MOMENTUM': {
-          const { rpciPassThreshold, contractionBars, maxContractionBars, momentumThreshold, atrPeriod, normLookback, volPeriod } = rule;
+          const { rpciPassThreshold, valuationPassThreshold = 1.5, earningsPowerMinConsistency = 0.55, contractionBars, maxContractionBars, momentumThreshold, atrPeriod, normLookback, volPeriod } = rule;
+          
+          if (!close || close.length < 100) {
+            rulePassed = false;
+            details = 'Insufficient Data';
+            rpciResults = { score: 0, label: 'Insufficient Data', subchecks: {} };
+            break;
+          }
           const len = close.length;
+
+          const safeGet = (arr, idx) => (idx >= 0 && idx < arr.length) ? arr[idx] : null;
+          const safeSlice = (arr, from, to) => {
+            const start = Math.max(0, from);
+            const end = Math.min(arr.length, to ?? arr.length);
+            return start < end ? arr.slice(start, end) : [];
+          };
 
           // Helper: safely get value from indicator array aligned to end
           const getInd = (arr, offsetFromEnd) => {
             if (!arr || arr.length === 0) return null;
             const idx = arr.length - 1 - offsetFromEnd;
-            return idx >= 0 ? arr[idx] : null;
+            return safeGet(arr, idx);
           };
 
           // Basic moving averages & indicators
@@ -158,7 +173,7 @@ class IndicatorEngine {
           const rsi14 = RSI.calculate({ period: 14, values: close });
           const bb20 = BollingerBands.calculate({ period: 20, stdDev: 2, values: close });
 
-          const lastClose = close[len - 1];
+          const lastClose = safeGet(close, len - 1);
 
           // ---------------------------------------------------------
           // LAYER 1: RPCI CHECKLIST
@@ -172,33 +187,38 @@ class IndicatorEngine {
           const lastSma200 = getInd(sma200, 0);
           if (lastSma200) {
             const ratio = lastClose / lastSma200;
-            valPass = ratio < 1.3;
-            if (ratio < 0.95) valLabel = 'Undervalued';
-            else if (ratio <= 1.15) valLabel = 'Fair Value';
-            else valLabel = 'Extended';
+            valPass = ratio < valuationPassThreshold;
+            if (ratio < 1.0) valLabel = 'Undervalued';
+            else if (ratio < 1.5) valLabel = 'Reasonably valued';
+            else if (ratio < 2.0) valLabel = 'Extended';
+            else valLabel = 'Highly Extended';
           }
           if (valPass) rpciScore++;
           rpciResults.valuation = { passed: valPass, label: valLabel };
 
-          // 2. Earnings Power (ROC63)
-          let roc63Pass = false;
-          let roc63Label = 'N/A';
-          if (len >= 64) {
-            const close63 = close[len - 64];
-            const roc63 = ((lastClose - close63) / close63) * 100;
-            roc63Pass = roc63 > 10;
-            if (roc63 > 20) roc63Label = 'Very Strong';
-            else if (roc63 > 10) roc63Label = 'Strong';
-            else roc63Label = 'Weak';
+          // 2. Earnings Power (Trend Consistency)
+          let earnPass = false;
+          let earnLabel = 'N/A';
+          const last60 = safeSlice(close, len - 60, len);
+          if (last60.length > 1) {
+            let upDays = 0;
+            for (let i = 1; i < last60.length; i++) {
+              if (last60[i] > last60[i - 1]) upDays++;
+            }
+            const consistency = upDays / 60;
+            earnPass = consistency >= earningsPowerMinConsistency;
+            if (consistency >= 0.65) earnLabel = 'Strong';
+            else if (consistency >= 0.55) earnLabel = 'Moderate';
+            else earnLabel = 'Weak';
           }
-          if (roc63Pass) rpciScore++;
-          rpciResults.earnings = { passed: roc63Pass, label: roc63Label };
+          if (earnPass) rpciScore++;
+          rpciResults.earnings = { passed: earnPass, label: earnLabel };
 
           // 3. Momentum (RSI14 & ROC20)
           let momPass = false;
           let momLabel = 'N/A';
-          if (len >= 21) {
-            const close20 = close[len - 21];
+          const close20 = safeGet(close, len - 21);
+          if (close20 !== null) {
             const roc20 = ((lastClose - close20) / close20) * 100;
             const lastRsi = getInd(rsi14, 0);
             
@@ -241,26 +261,36 @@ class IndicatorEngine {
           if (len >= 20) {
             for (let i = len - 10; i < len; i++) {
               if (i < 20) continue; // safety
-              const isGreen = close[i] > data.opens[i]; // wait, do we have opens? yes, data.opens
+              const cClose = safeGet(close, i);
+              const cOpen = safeGet(data.opens, i);
+              const cVol = safeGet(volume, i);
+              if (cClose === null || cOpen === null || cVol === null) continue;
+              
+              const isGreen = cClose > cOpen;
               if (!isGreen) continue;
               
-              const body = close[i] - data.opens[i];
+              const body = cClose - cOpen;
               
               // 10-day avg body
               let sumBody = 0;
               for (let j = i - 10; j < i; j++) {
-                sumBody += Math.abs(close[j] - data.opens[j]);
+                const jClose = safeGet(close, j);
+                const jOpen = safeGet(data.opens, j);
+                if (jClose !== null && jOpen !== null) {
+                  sumBody += Math.abs(jClose - jOpen);
+                }
               }
               const avgBody = sumBody / 10;
               
               // 20-day avg vol
               let sumVol = 0;
               for (let j = i - 20; j < i; j++) {
-                sumVol += volume[j];
+                const jVol = safeGet(volume, j);
+                if (jVol !== null) sumVol += jVol;
               }
               const avgVol = sumVol / 20;
               
-              if (body > 1.5 * avgBody && volume[i] > 1.5 * avgVol) {
+              if (body > 1.5 * avgBody && cVol > 1.5 * avgVol) {
                 instCount++;
               }
             }
@@ -272,7 +302,7 @@ class IndicatorEngine {
           // 8. Short-term Extension
           let stExtPass = false; // PASS means NOT overextended
           const lastBB = getInd(bb20, 0);
-          if (lastBB) {
+          if (lastBB && lastBB.upper !== undefined) {
             stExtPass = lastClose <= lastBB.upper;
           }
           if (stExtPass) rpciScore++;
@@ -318,7 +348,6 @@ class IndicatorEngine {
           // ---------------------------------------------------------
           const atr = ATR.calculate({ high, low, close, period: atrPeriod });
           if (atr.length < normLookback + contractionBars + 1) {
-             // Fallback if not enough data, just fail gracefully
              rulePassed = false;
              details = 'Insufficient data for Momentum calculations.';
              break;
@@ -327,30 +356,35 @@ class IndicatorEngine {
           const paddedAtr = new Array(close.length - atr.length).fill(null).concat(atr);
           const rawMomentum = new Array(close.length).fill(null);
           for (let i = 1; i < close.length; i++) {
-            if (paddedAtr[i] !== null) {
-              rawMomentum[i] = Math.abs(close[i] - close[i - 1]) / paddedAtr[i];
+            const padAtrI = safeGet(paddedAtr, i);
+            const cI = safeGet(close, i);
+            const cIPrev = safeGet(close, i - 1);
+            if (padAtrI !== null && padAtrI > 0 && cI !== null && cIPrev !== null) {
+              rawMomentum[i] = Math.abs(cI - cIPrev) / padAtrI;
             }
           }
 
           const normValue = new Array(close.length).fill(null);
           for (let i = normLookback; i < close.length; i++) {
-            if (rawMomentum[i] === null) continue;
+            if (safeGet(rawMomentum, i) === null) continue;
             let rollingMax = -Infinity;
             for (let j = i - normLookback + 1; j <= i; j++) {
-              if (rawMomentum[j] > rollingMax) rollingMax = rawMomentum[j];
+              const val = safeGet(rawMomentum, j);
+              if (val !== null && val > rollingMax) rollingMax = val;
             }
             if (rollingMax > 0) {
-              normValue[i] = Math.min((rawMomentum[i] / rollingMax) * 10, 10);
+              normValue[i] = Math.min((safeGet(rawMomentum, i) / rollingMax) * 10, 10);
             } else {
               normValue[i] = 0;
             }
           }
 
-          const todayNorm = normValue[len - 1] !== null ? normValue[len - 1] : 0;
+          const todayNorm = safeGet(normValue, len - 1) !== null ? safeGet(normValue, len - 1) : 0;
           
           let contractionCount = 0;
           for (let i = len - 2; i >= 0; i--) {
-            if (normValue[i] === null || normValue[i] >= momentumThreshold) break;
+            const val = safeGet(normValue, i);
+            if (val === null || val >= momentumThreshold) break;
             contractionCount++;
             if (contractionCount >= maxContractionBars) break;
           }
@@ -362,8 +396,9 @@ class IndicatorEngine {
           // Short-term resistance check
           let resistance = -Infinity;
           for (let i = len - 11; i <= len - 2; i++) {
-            if (i >= 0 && high[i] > resistance) {
-              resistance = high[i];
+            const hI = safeGet(high, i);
+            if (hI !== null && hI > resistance) {
+              resistance = hI;
             }
           }
           const resistanceBreakout = lastClose > resistance;
@@ -407,24 +442,22 @@ class IndicatorEngine {
           // Condition C: Volume confirmation
           let condC = false;
           if (len >= volPeriod + 1) {
-            const recentVols = volume.slice(len - volPeriod - 1, len - 1);
-            const volumeMA = recentVols.reduce((a, b) => a + b, 0) / recentVols.length;
-            condC = volume[len - 1] > volumeMA;
+            const recentVols = safeSlice(volume, len - volPeriod - 1, len - 1);
+            if (recentVols.length > 0) {
+              const volumeMA = recentVols.reduce((a, b) => a + b, 0) / recentVols.length;
+              condC = safeGet(volume, len - 1) > volumeMA;
+            }
           }
           
           rulePassed = condA && condB && condC;
           currentValue = todayNorm;
           
-          const isGreen = close[len - 1] >= close[len - 2];
+          const prevClose = safeGet(close, len - 2);
+          const isGreen = prevClose !== null ? (lastClose >= prevClose) : true;
           const color = isGreen ? '🟢' : '🔴';
           
           details = `Norm Score: ${currentValue.toFixed(2)} ${color} | Contraction: ${patternDetected} | Vol > MA: ${condC}`;
           
-          // Inject rpciBreakdown into rule result object
-          // Since the caller expects primitive types usually, we attach it to 'this' or 
-          // we modify how evaluateCondition returns things. 
-          // Wait, _evaluateCondition just returns an object that is added to condition results.
-          // Let's add rpciBreakdown to the returned object.
           break; // The breakdown will be appended below
         }
 

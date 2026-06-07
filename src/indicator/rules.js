@@ -27,6 +27,8 @@ const rules = {
       weight: 20,
       mandatory: true,
       rpciPassThreshold: 7,
+      valuationPassThreshold: 1.5,
+      earningsPowerMinConsistency: 0.55,
       contractionBars: 3,
       maxContractionBars: 10,
       momentumThreshold: 5.0,
