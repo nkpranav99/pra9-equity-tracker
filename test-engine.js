@@ -9,8 +9,8 @@ async function test() {
   const engine = new IndicatorEngine(fetcher);
   
   try {
-    const res = await engine.evaluate('HIMADRI.NS'); // HIMADRI.NS was referenced
-    console.log(formatStockCheck('HIMADRI.NS', res));
+    const res1 = await engine.evaluate('WELCORP.NS');
+    console.log(formatStockCheck('WELCORP.NS', res1));
   } catch (err) {
     console.error(err);
   }
